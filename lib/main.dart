@@ -40,3 +40,26 @@ class _RootDecider extends StatelessWidget {
     );
   }
 }
+
+/*class _RootDecider extends StatelessWidget {
+  const _RootDecider();
+
+  Future<bool> _mockIsLoggedIn() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return true; // <- simula sesión activa
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _mockIsLoggedIn(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return const DashboardScreen();
+      },
+    );
+  }
+}*/
+

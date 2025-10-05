@@ -12,7 +12,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _userCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final ok = await AuthService.login(_emailCtrl.text.trim(), _passCtrl.text);
+    final ok = await AuthService.login(_userCtrl.text.trim(), _passCtrl.text);
     setState(() => _loading = false);
 
     if (!mounted) return;
@@ -119,9 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Text('Iniciar sesión', style: Theme.of(context).textTheme.titleLarge),
                                 const SizedBox(height: 12),
                                 TextFormField(
-                                  controller: _emailCtrl,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: _inputDecoration(hint: 'Usuario o correo', icon: Icons.person),
+                                  controller: _userCtrl,
+                                  //keyboardType: TextInputType.emailAddress,
+                                  decoration: _inputDecoration(hint: 'Nombre de usuario', icon: Icons.person),
                                   validator: (v) {
                                     if (v == null || v.trim().isEmpty) return 'Ingresa tu usuario';
                                     return null;
