@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/dashboard_screen.dart';
+import 'package:delirio_app/screens/register_role_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -178,7 +180,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Text('¿No tienes cuenta?'),
-                                    TextButton(onPressed: () {}, child: const Text('Crear cuenta')),
+                                    TextButton(
+                                        onPressed: () {
+                                            Navigator.of(context).push(MaterialPageRoute(
+                                                builder: (_) => const RegisterRoleScreen(),
+                                            ));
+                                        },
+                                        child: const Text('Crear cuenta'),
+                                    ),
                                   ],
                                 ),
                               ],
