@@ -112,17 +112,24 @@ class _ProductScreenState extends State<ProductScreen> {
       );
     }
 
-    final p = _producto!;
+    final p = _producto;
+    if (p == null) {
+      // Si por alguna razón no hay producto pero no estamos en loading/error,
+      // mostramos un mensaje seguro en lugar de usar el operador `!`.
+      return Scaffold(
+        appBar: AppBar(title: const Text('Producto')),
+        body: Center(child: Text('Producto no disponible', style: theme.textTheme.titleMedium)),
+      );
+    }
+
     final disponible = p.stock > 0;
     final estadoTexto = disponible ? 'Disponible (${p.stock} unidades)' : 'Agotado';
     final colorEstado = disponible ? Colors.green : Colors.red;
 
     // Lista de imágenes segura
-    final List<String> imgs = (p.imagenes.isNotEmpty)
-        ? p.imagenes
-        : (p.imageUrl != null && p.imageUrl!.isNotEmpty)
-            ? [p.imageUrl!]
-            : ['https://via.placeholder.com/1200x800'];
+  final List<String> imgs = (p.imagenes.isNotEmpty)
+    ? p.imagenes
+    : (p.imageUrl.isNotEmpty ? [p.imageUrl] : ['https://via.placeholder.com/1200x800']);
 
     return Scaffold(
       appBar: AppBar(

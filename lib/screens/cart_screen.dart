@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/order_confirmation_screen.dart';
-
+import 'package:delirio_app/services/auth_service.dart';
+import 'package:delirio_app/services/cart_api.dart';
+import 'package:delirio_app/screens/login_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -16,16 +18,97 @@ class _CartScreenState extends State<CartScreen> {
 
   // Ajustes de cálculo
   static const double _ivaRate = 0.12; // 12% (EC)
-  static const double _envio = 3.99; // envío fijo de ejemplo
+  static const double _envio = 3.99;   // envío fijo de ejemplo
 
-  double _subtotal(List<CartItem> items) => items.fold(0.0, (sum, it) => sum + it.precio * it.qty);
+  bool _saving = false;
+
+  double _subtotal(List<CartItem> items) =>
+      items.fold(0.0, (sum, it) => sum + it.precio * it.qty);
   double _iva(List<CartItem> items) => _subtotal(items) * _ivaRate;
-  double _total(List<CartItem> items) => (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items) + _envio);
+  double _total(List<CartItem> items) =>
+      (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items) + _envio);
 
-  void _incQty(CartItem it) => setState(() => it.qty = (it.qty + 1).clamp(1, 99));
-  void _decQty(CartItem it) => setState(() => it.qty = (it.qty - 1).clamp(1, 99));
+  void _incQty(CartItem it) {
+    // Actualiza la cantidad y notifica al ValueNotifier para que todos los
+    // escuchadores (incluyendo otros widgets) se refresquen correctamente.
+    setState(() => it.qty = (it.qty + 1).clamp(1, 99));
+    cart.items.notifyListeners();
+  }
+
+  void _decQty(CartItem it) {
+    setState(() => it.qty = (it.qty - 1).clamp(1, 99));
+    cart.items.notifyListeners();
+  }
+
   void _remove(CartItem it) => cart.removeItem(it.id);
+
   void _clearCart() => cart.clear();
+
+  int? _extractUserId(Map<String, dynamic>? claims) {
+    if (claims == null) return null;
+    final candidates = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
+    for (final k in candidates) {
+      final v = claims[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      final parsed = int.tryParse(v.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  Future<void> _checkout(List<CartItem> items) async {
+    final auth = AuthService.instance;
+    final claims = auth.claims;
+    final userId = _extractUserId(claims);
+
+    if (!auth.isLoggedIn() || userId == null) {
+      final goLogin = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Inicia sesión'),
+          content: const Text('Necesitas iniciar sesión para completar tu pedido.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Iniciar sesión')),
+          ],
+        ),
+      );
+      if (goLogin == true) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)),
+        );
+        setState(() {});
+      }
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      // Envía al backend
+      await CartApi.agregarCarrito(userId: userId, items: items);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pedido enviado ✅')),
+      );
+
+      // Limpia el carrito local si tu backend persiste el pedido
+      _clearCart();
+
+      // Navega a confirmación
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo procesar el pedido: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,20 +124,22 @@ class _CartScreenState extends State<CartScreen> {
               if (items.isEmpty) return const SizedBox.shrink();
               return IconButton(
                 tooltip: 'Vaciar carrito',
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Vaciar carrito'),
-                      content: const Text('Se eliminarán todos los productos.'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Vaciar')),
-                      ],
-                    ),
-                  );
-                  if (ok == true) _clearCart();
-                },
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Vaciar carrito'),
+                            content: const Text('Se eliminarán todos los productos.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Vaciar')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) _clearCart();
+                      },
                 icon: const Icon(Icons.delete_outline),
               );
             },
@@ -78,8 +163,8 @@ class _CartScreenState extends State<CartScreen> {
                           itemBuilder: (_, i) {
                             final it = items[i];
                             return Dismissible(
-                              key: ValueKey(it.id),
-                              direction: DismissDirection.endToStart,
+                              key: ValueKey('${it.id}-${i}'),
+                              direction: _saving ? DismissDirection.none : DismissDirection.endToStart,
                               onDismissed: (_) => _remove(it),
                               background: Container(
                                 alignment: Alignment.centerRight,
@@ -92,9 +177,9 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: _CartTile(
                                 item: it,
-                                onDec: () => _decQty(it),
-                                onInc: () => _incQty(it),
-                                onRemove: () => _remove(it),
+                                onDec: _saving ? null : () => _decQty(it),
+                                onInc: _saving ? null : () => _incQty(it),
+                                onRemove: _saving ? null : () => _remove(it),
                               ),
                             );
                           },
@@ -105,13 +190,8 @@ class _CartScreenState extends State<CartScreen> {
                         iva: _iva(items),
                         envio: _envio,
                         total: _total(items),
-                        onCheckout: () {
-                            Navigator.of(context).push(
-                                MaterialPageRoute(
-                                    builder: (_) => const OrderConfirmationScreen(),
-                                ),
-                            );
-                        },
+                        isLoading: _saving,
+                        onCheckout: _saving ? null : () => _checkout(items),
                       ),
                     ],
                   );
@@ -124,9 +204,9 @@ class _CartScreenState extends State<CartScreen> {
 
 class _CartTile extends StatelessWidget {
   final CartItem item;
-  final VoidCallback onDec;
-  final VoidCallback onInc;
-  final VoidCallback onRemove;
+  final VoidCallback? onDec;
+  final VoidCallback? onInc;
+  final VoidCallback? onRemove;
 
   const _CartTile({
     required this.item,
@@ -137,96 +217,133 @@ class _CartTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            // Imagen
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(
-                      item.imagen ?? '',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: theme.colorScheme.surfaceVariant,
-                    child: const Icon(Icons.local_florist, size: 28),
+    try {
+      final theme = Theme.of(context);
+      return Card(
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Imagen (si no hay URL válida, mostramos un placeholder local)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                // AspectRatio requiere constraints; envolvemos en SizedBox fijo para evitar 'unconstrained'
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Builder(builder: (context) {
+                      final url = item.imagen?.trim();
+                      if (url == null || url.isEmpty) {
+                        return Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Icon(Icons.local_florist, size: 28),
+                        );
+                      }
+
+                      return Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Icon(Icons.local_florist, size: 28),
+                        ),
+                      );
+                    }),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-          Text(item.nombre,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.categoria,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '\$${item.precio.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: kFucsia,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Controles de cantidad
-                  Row(
-                    children: [
-                      _QtyButton(icon: Icons.remove, onTap: onDec),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text('${item.qty}', style: theme.textTheme.titleMedium),
+              const SizedBox(width: 12),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.nombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.categoria,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      _QtyButton(icon: Icons.add, onTap: onInc),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: 'Eliminar',
-                        onPressed: onRemove,
-                        icon: const Icon(Icons.delete_outline),
-                      )
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '\$${item.precio.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: kFucsia,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Controles de cantidad
+                    Row(
+                      children: [
+                        _QtyButton(icon: Icons.remove, onTap: onDec),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text('${item.qty}', style: theme.textTheme.titleMedium),
+                        ),
+                        _QtyButton(icon: Icons.add, onTap: onInc),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Eliminar',
+                          onPressed: onRemove,
+                          icon: const Icon(Icons.delete_outline),
+                        )
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e, st) {
+      // Evitar que un error de renderización (null inesperado, etc.) bloquee
+      // toda la pantalla del carrito. Logueamos y mostramos un placeholder.
+      // En Flutter Web esto aparecerá en la consola JS (js_primitives).
+      debugPrint('Cart tile build error: $e\n$st');
+      return Card(
+        color: Colors.red.shade50,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Error al mostrar este producto', style: TextStyle(color: Colors.red.shade700))),
+              IconButton(onPressed: onRemove, icon: const Icon(Icons.delete_outline)),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }
 
 class _QtyButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _QtyButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disabled = onTap == null;
     return Ink(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant,
+        color: disabled ? theme.disabledColor.withOpacity(.1) : theme.colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
@@ -234,7 +351,7 @@ class _QtyButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18),
+          child: Icon(icon, size: 18, color: disabled ? theme.disabledColor : null),
         ),
       ),
     );
@@ -246,19 +363,23 @@ class _SummaryCard extends StatelessWidget {
   final double iva;
   final double envio;
   final double total;
-  final VoidCallback onCheckout;
+  final bool isLoading;
+  final VoidCallback? onCheckout;
 
   const _SummaryCard({
     required this.subtotal,
     required this.iva,
     required this.envio,
     required this.total,
+    required this.isLoading,
     required this.onCheckout,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disabled = onCheckout == null;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
@@ -291,13 +412,16 @@ class _SummaryCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: kFucsia,
+                    backgroundColor: disabled ? theme.disabledColor : kFucsia,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: onCheckout,
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('Hacer pedido'),
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.lock_outline),
+                  label: Text(isLoading ? 'Procesando...' : 'Hacer pedido'),
                 ),
               ),
             ],
@@ -355,22 +479,4 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CartItem {
-  final int id;
-  final String nombre;
-  final String categoria;
-  final double precio;
-  final String imagen;
-  int qty;
-
-  _CartItem({
-    required this.id,
-    required this.nombre,
-    required this.categoria,
-    required this.precio,
-    required this.imagen,
-    this.qty = 1,
-  });
 }
