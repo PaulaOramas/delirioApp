@@ -65,5 +65,25 @@ class ClienteApi {
       return body.first as Map<String, dynamic>;
     }
     return null;
+  }
+
+  /// Actualiza el perfil del cliente por ID. Devuelve true si la operación fue exitosa.
+  /// Endpoint: PUT /api/clientes/{id}
+  static Future<bool> updatePerfil(int id, Map<String, dynamic> payload) async {
+    final uri = Uri.parse('$_baseUrl/api/clientes/$id');
+    try {
+      final res = await http
+          .put(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode(payload),
+          )
+          .timeout(_timeout);
+
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
     }
+  }
+
 }

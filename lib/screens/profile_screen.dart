@@ -9,6 +9,7 @@ import 'package:delirio_app/services/cliente_api.dart';
 import 'package:delirio_app/models/cliente_perfil.dart';
 // Navigation helper (global bottomNavIndex)
 import 'package:delirio_app/navigation.dart';
+import 'package:delirio_app/screens/edit_profile_screen.dart';
 
 // NOTA: themeController debe exportarse desde lib/theme.dart
 
@@ -300,9 +301,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onEditTap() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Próximamente: Editar perfil')),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditProfileMockScreen()))
+        .then((updated) {
+      // Si el editor devolvió true, refrescamos la pantalla para recargar datos
+      if (updated == true && mounted) setState(() {});
+    });
   }
 
   int? _extractUserId(Map<String, dynamic>? claims) {

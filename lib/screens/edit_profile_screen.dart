@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:delirio_app/services/cliente_api.dart';
+import 'package:delirio_app/services/auth_service.dart';
 
 /// ====== MODELO LOCAL (mock) ======
 class UserProfileMock {
@@ -52,6 +54,7 @@ class EditProfileMockScreen extends StatefulWidget {
 
 class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
   final _repo = FakeProfileRepository();
+  int? _userId;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -78,7 +81,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
   void initState() {
     super.initState();
     _passwordCtrl.addListener(_onPasswordChanged);
-    _load();
+    _initAndLoad();
   }
 
   @override
@@ -97,15 +100,39 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final p = await _repo.getPerfil();
-    _profile = p;
-    _nombreCtrl.text = p.nombre;
-    _apellidoCtrl.text = p.apellido;
-    _cedulaCtrl.text = p.cedula;
-    _correoCtrl.text = p.correo;
-    _telefonoCtrl.text = p.telefono;
-    _usuarioCtrl.text = p.usuario;
+    try {
+      if (_userId != null) {
+        final pApi = await ClienteApi.getPerfilById(_userId!);
+        _profile = UserProfileMock(
+          nombre: pApi.nombre,
+          apellido: pApi.apellido,
+          cedula: pApi.cedula,
+          correo: pApi.correo,
+          telefono: pApi.telefono,
+          usuario: pApi.usuario,
+        );
+      } else {
+        final p = await _repo.getPerfil();
+        _profile = p;
+      }
+    } catch (_) {
+      // fallback al mock si falla la API
+      final p = await _repo.getPerfil();
+      _profile = p;
+    }
+    _nombreCtrl.text = _profile.nombre;
+    _apellidoCtrl.text = _profile.apellido;
+    _cedulaCtrl.text = _profile.cedula;
+    _correoCtrl.text = _profile.correo;
+    _telefonoCtrl.text = _profile.telefono;
+    _usuarioCtrl.text = _profile.usuario;
     setState(() => _loading = false);
+  }
+
+  Future<void> _initAndLoad() async {
+    final claims = AuthService.instance.claims;
+    _userId = _extractUserId(claims);
+    await _load();
   }
 
   // ===== VALIDACIONES =====
@@ -231,10 +258,24 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
       usuario: _usuarioCtrl.text.trim(),
     );
 
-    final ok = await _repo.updatePerfil(
-      updated,
-      newPassword: _showPasswordSection ? _passwordCtrl.text : null,
-    );
+    bool ok = false;
+    if (_userId != null) {
+      final payload = {
+        'Nombre': updated.nombre,
+        'Apellido': updated.apellido,
+        'Cedula': updated.cedula,
+        'Correo': updated.correo,
+        'Telefono': updated.telefono,
+        'Usuario': updated.usuario,
+        if (_showPasswordSection) 'Password': _passwordCtrl.text,
+      };
+      ok = await ClienteApi.updatePerfil(_userId!, payload);
+    } else {
+      ok = await _repo.updatePerfil(
+        updated,
+        newPassword: _showPasswordSection ? _passwordCtrl.text : null,
+      );
+    }
 
     if (!mounted) return;
     setState(() => _saving = false);
@@ -254,6 +295,19 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
     final s1 = n.trim().isNotEmpty ? n.trim()[0] : '';
     final s2 = a.trim().isNotEmpty ? a.trim()[0] : '';
     return (s1 + s2).toUpperCase();
+  }
+
+  int? _extractUserId(Map<String, dynamic>? claims) {
+    if (claims == null) return null;
+    final candidates = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
+    for (final k in candidates) {
+      final v = claims[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      final parsed = int.tryParse(v.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
   }
 
   @override
