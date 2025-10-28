@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
+import 'package:delirio_app/navigation.dart';
 // Estas pantallas sí se usan
 import 'package:delirio_app/screens/dashboard_screen.dart';
 import 'package:delirio_app/screens/search_screen.dart';
@@ -50,31 +51,31 @@ class MainScaffold extends StatefulWidget {
 }
 
 class _MainScaffoldState extends State<MainScaffold> {
-  int _currentIndex = 0; // 0 => DashboardScreen
-
   static final List<Widget> _pages = <Widget>[
     const DashboardScreen(),
     const SearchScreen(),
     const ProfileScreen(),
   ];
 
-  void _onTap(int idx) {
-    setState(() => _currentIndex = idx);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTap,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Buscar'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-        ],
-      ),
+    return ValueListenableBuilder<int>(
+      valueListenable: bottomNavIndex,
+      builder: (context, currentIndex, _) {
+        final idx = (currentIndex >= 0 && currentIndex < _pages.length) ? currentIndex : 0;
+        return Scaffold(
+          body: _pages[idx],
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: idx,
+            onTap: (i) => bottomNavIndex.value = i,
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+              BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Buscar'),
+              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+            ],
+          ),
+        );
+      },
     );
   }
 }

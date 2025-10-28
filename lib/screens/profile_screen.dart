@@ -7,6 +7,8 @@ import 'package:delirio_app/screens/login_screen.dart';
 // API y modelo
 import 'package:delirio_app/services/cliente_api.dart';
 import 'package:delirio_app/models/cliente_perfil.dart';
+// Navigation helper (global bottomNavIndex)
+import 'package:delirio_app/navigation.dart';
 
 // NOTA: themeController debe exportarse desde lib/theme.dart
 
@@ -120,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Guarda tus pedidos, direcciones y preferencias fácilmente.',
+                        'Guarda tus pedidos y preferencias fácilmente.',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -376,11 +378,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (result == true) {
       await AuthService.instance.logout();
+      // Cambiar a pestaña Inicio (dashboard) en lugar de redirigir al Login
+      try {
+        // bottomNavIndex provisto por `lib/navigation.dart`
+        // si no está disponible, la app seguirá en la pantalla actual pero con sesión cerrada
+        bottomNavIndex.value = 0;
+      } catch (_) {}
+
       if (!context.mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+      // Cerrar todas las rutas sobre la raíz para evitar pantallas abiertas encima
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() {}); // forzar reconstrucción si estamos dentro de MainScaffold
     }
   }
 }
