@@ -23,6 +23,11 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   static const double _ivaRate = 0.12; // Ecuador
   static const double _envio = 3.99;
 
+  // Ventana y horario de retiro (ajusta a tu negocio)
+  static const int _pickupWindowDays = 7; // permitir escoger hasta 7 días adelante
+  static const int _openHour = 9;  // 09:00
+  static const int _closeHour = 21; // 21:00
+
   // Usamos la MISMA instancia de carrito para poder limpiar localStorage correctamente
   final CartService _cart = CartService();
 
@@ -39,6 +44,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
 
   bool _sending = false;
 
+  // Fecha/hora de retiro seleccionada
+  DateTime? _retirarEn;
+
   double get _subtotal => _items.fold(0.0, (s, it) => s + (it.precio * it.qty));
   double get _iva => _subtotal * _ivaRate;
   double get _total => _subtotal + _iva + _envio;
@@ -51,6 +59,98 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     _items = List.of(_cart.items.value);
     final now = DateTime.now();
     _orderId = 'EST-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
+    // Valor por defecto: próxima media hora dentro del horario
+    _retirarEn = _defaultPickup();
+  }
+
+  // ====== Pickers de fecha y hora ======
+  DateTime _roundToNext30(DateTime dt) {
+    final add = dt.minute % 30 == 0 ? 0 : (30 - dt.minute % 30);
+    final rounded = DateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute).add(Duration(minutes: add));
+    return rounded;
+  }
+
+  DateTime _defaultPickup() {
+    final now = DateTime.now();
+    var candidate = _roundToNext30(now);
+    final open = DateTime(now.year, now.month, now.day, _openHour);
+    final close = DateTime(now.year, now.month, now.day, _closeHour);
+
+    if (candidate.isBefore(open)) {
+      candidate = open;
+    } else if (candidate.isAfter(close)) {
+      // siguiente día a primera hora
+      final nextDay = now.add(const Duration(days: 1));
+      candidate = DateTime(nextDay.year, nextDay.month, nextDay.day, _openHour);
+    }
+    return candidate;
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final initial = _retirarEn ?? _defaultPickup();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year, now.month, now.day + _pickupWindowDays),
+      helpText: 'Selecciona la fecha de retiro',
+    );
+    if (selectedDate == null) return;
+
+    final current = _retirarEn ?? _defaultPickup();
+    final candidate = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      current.hour,
+      current.minute,
+    );
+
+    setState(() {
+      _retirarEn = _normalizeToBusinessHours(candidate);
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final base = _retirarEn ?? _defaultPickup();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: base.hour, minute: base.minute),
+      helpText: 'Selecciona la hora de retiro',
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (picked == null) return;
+
+    final candidate = DateTime(base.year, base.month, base.day, picked.hour, picked.minute);
+    final normalized = _normalizeToBusinessHours(_roundToNext30(candidate));
+
+    if (!_isInBusinessWindow(normalized)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('El horario de retiro es de ${_pad2(_openHour)}:00 a ${_pad2(_closeHour)}:00')),
+      );
+      return;
+    }
+
+    setState(() => _retirarEn = normalized);
+  }
+
+  DateTime _normalizeToBusinessHours(DateTime dt) {
+    final open = DateTime(dt.year, dt.month, dt.day, _openHour);
+    final close = DateTime(dt.year, dt.month, dt.day, _closeHour);
+    if (dt.isBefore(open)) return open;
+    if (dt.isAfter(close)) return close;
+    return _roundToNext30(dt);
+  }
+
+  bool _isInBusinessWindow(DateTime dt) {
+    final open = DateTime(dt.year, dt.month, dt.day, _openHour);
+    final close = DateTime(dt.year, dt.month, dt.day, _closeHour);
+    return (dt.isAtSameMomentAs(open) || dt.isAfter(open)) && (dt.isBefore(close) || dt.isAtSameMomentAs(close));
   }
 
   Future<void> _pickVoucher() async {
@@ -103,6 +203,27 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       if (!AuthService.instance.isLoggedIn()) return;
     }
 
+    // Validación de fecha/hora de retiro
+    if (_retirarEn == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona la fecha y hora de retiro')),
+      );
+      return;
+    }
+    final now = DateTime.now();
+    if (_retirarEn!.isBefore(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La fecha/hora de retiro debe ser posterior al momento actual')),
+      );
+      return;
+    }
+    if (!_isInBusinessWindow(_retirarEn!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('El retiro debe estar entre ${_pad2(_openHour)}:00 y ${_pad2(_closeHour)}:00')),
+      );
+      return;
+    }
+
     // Requerir comprobante
     if (_voucherBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,7 +242,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
 
     setState(() => _sending = true);
     try {
-      // 1) Envía el pedido al backend
+      // 1) Envía el pedido al backend (agregamos fechaRetiro)
       final resp = await PedidoApi.crearPedido(
         userId: userId,
         fecha: DateTime.now(),
@@ -132,7 +253,6 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
         comprobanteBytes: _voucherBytes,
         estado: 'PEN', // PENDIENTE
       );
-
 
       if (!mounted) return;
 
@@ -146,7 +266,8 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
           title: const Text('¡Pedido enviado!'),
           content: Text(
             'Tu pedido fue registrado con ID $serverId.\n'
-            'Referencia local: $_orderId\n\n'
+            'Referencia local: $_orderId\n'
+            'Retiro: ${_fmtDateTime(_retirarEn!)}\n\n'
             'Monto recibido: \$${_montoAPagar.toStringAsFixed(2)} '
             '(${_pagoSeleccionado == 0 ? '50%' : '100%'}). '
             'Quedará en estado PENDIENTE hasta la revisión.',
@@ -155,7 +276,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx); // cierra el diálogo
-                // 3) AHORA limpiamos el carrito (localStorage + notifiers)
+                // 3) Limpiamos el carrito
                 _cart.clear();
                 // 4) Volver a Home (o pop a la raíz)
                 Navigator.of(context).popUntil((route) => route.isFirst);
@@ -210,7 +331,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         ),
                         child: const Icon(Icons.receipt_long, color: kFucsia),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -232,7 +353,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               const SizedBox(height: 12),
 
               // Items
-              _SectionTitle('Productos'),
+              const _SectionTitle('Productos'),
               const SizedBox(height: 8),
               if (_items.isEmpty)
                 const _EmptyItems()
@@ -240,8 +361,62 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                 ..._items.map((it) => _ItemTile(item: it, onTap: () {})).toList(),
               const SizedBox(height: 12),
 
+              // ===== NUEVO: Selección de fecha y hora de retiro =====
+              const _SectionTitle('Retiro en local'),
+              const SizedBox(height: 8),
+              Card(
+                elevation: 0,
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Selecciona la fecha y hora en la que deseas retirar tu pedido.\n'
+                        'Horario de atención: ${_pad2(_openHour)}:00 – ${_pad2(_closeHour)}:00. '
+                        'Puedes agendar dentro de los próximos $_pickupWindowDays días.',
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _sending ? null : _pickDate,
+                              icon: const Icon(Icons.event_outlined),
+                              label: Text(_retirarEn == null
+                                  ? 'Elegir fecha'
+                                  : 'Fecha: ${_fmtDate(_retirarEn!)}'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _sending ? null : _pickTime,
+                              icon: const Icon(Icons.access_time),
+                              label: Text(_retirarEn == null
+                                  ? 'Elegir hora'
+                                  : 'Hora: ${_fmtTime(_retirarEn!)}'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_retirarEn != null && !_isInBusinessWindow(_retirarEn!))
+                        Text(
+                          'La hora seleccionada está fuera del horario. Se ajustará al horario de atención.',
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
               // Resumen
-              _SectionTitle('Resumen'),
+              const _SectionTitle('Resumen'),
               const SizedBox(height: 8),
               Card(
                 elevation: 0,
@@ -258,6 +433,22 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                       _row('Envío', _envio),
                       const Divider(height: 22),
                       _row('Total', _total, bold: true, fucsia: true),
+                      const SizedBox(height: 12),
+                      // Mostrar selección de retiro en el resumen
+                      Row(
+                        children: [
+                          const Icon(Icons.store_mall_directory_outlined, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _retirarEn == null
+                                  ? 'Retiro: sin definir'
+                                  : 'Retiro: ${_fmtDateTime(_retirarEn!)}',
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -265,7 +456,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               const SizedBox(height: 12),
 
               // Pago
-              _SectionTitle('Pago'),
+              const _SectionTitle('Pago'),
               const SizedBox(height: 8),
               Card(
                 elevation: 0,
@@ -294,7 +485,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               const SizedBox(height: 12),
 
               // Comprobante
-              _SectionTitle('Comprobante de pago'),
+              const _SectionTitle('Comprobante de pago'),
               const SizedBox(height: 8),
               Card(
                 elevation: 0,
@@ -384,7 +575,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   icon: _sending
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.check_circle_outline),
-                  label: Text(_sending ? 'Enviando...' : 'Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
+                  label: Text(_sending
+                      ? 'Enviando...'
+                      : 'Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -424,6 +617,14 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     final day = d.day.toString().padLeft(2, '0');
     return '$day/$m/$y';
   }
+
+  String _fmtTime(DateTime d) {
+    final h = _pad2(d.hour);
+    final mi = _pad2(d.minute);
+    return '$h:$mi';
+  }
+
+  String _fmtDateTime(DateTime d) => '${_fmtDate(d)} ${_fmtTime(d)}';
 
   String _pad2(int n) => n.toString().padLeft(2, '0');
 }
@@ -492,7 +693,7 @@ class _ItemTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(height: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,20 +737,13 @@ class _EmptyItems extends StatelessWidget {
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(Icons.remove_shopping_cart_outlined, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'No hay productos en este pedido.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+            Icon(Icons.remove_shopping_cart_outlined),
+            SizedBox(width: 10),
+            Expanded(child: Text('No hay productos en este pedido.')),
           ],
         ),
       ),
