@@ -1,3 +1,4 @@
+// lib/screens/order_confirmation_screen.dart
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
+import 'package:delirio_app/services/pedido_api.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   const OrderConfirmationScreen({super.key});
@@ -18,24 +20,25 @@ class OrderConfirmationScreen extends StatefulWidget {
 
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   // ====== Configuración de cálculo ======
-  static const double _ivaRate = 0.12; // 12% (EC)
+  static const double _ivaRate = 0.12; // Ecuador
   static const double _envio = 3.99;
+
+  // Usamos la MISMA instancia de carrito para poder limpiar localStorage correctamente
+  final CartService _cart = CartService();
 
   // Snapshot de ítems del carrito (tomado una sola vez al entrar)
   late final List<CartItem> _items;
 
-  // Identificador local del pedido (visual)
+  // Identificador local (solo referencia visual)
   late final String _orderId;
 
-  // Pago: 0 = 50%, 1 = 100%
-  int _pagoSeleccionado = 0;
-
-  // Imagen del comprobante
+  int _pagoSeleccionado = 0; // 0 = 50%, 1 = 100%
   final ImagePicker _picker = ImagePicker();
   XFile? _voucherFile;
   Uint8List? _voucherBytes;
 
-  // ====== Cálculos ======
+  bool _sending = false;
+
   double get _subtotal => _items.fold(0.0, (s, it) => s + (it.precio * it.qty));
   double get _iva => _subtotal * _ivaRate;
   double get _total => _subtotal + _iva + _envio;
@@ -44,9 +47,10 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   @override
   void initState() {
     super.initState();
-    _items = List.of(CartService().items.value); // snapshot inmutable
+    // Tomamos snapshot para que el resumen no cambie aunque modifiquen el carrito en otra vista
+    _items = List.of(_cart.items.value);
     final now = DateTime.now();
-    _orderId = 'EST-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
+    _orderId = 'DLR-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
   }
 
   Future<void> _pickVoucher() async {
@@ -54,11 +58,11 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
       if (file == null) return;
       final bytes = await file.readAsBytes();
+      if (!mounted) return;
       setState(() {
         _voucherFile = file;
         _voucherBytes = bytes;
       });
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Comprobante adjuntado')),
       );
@@ -70,7 +74,20 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     }
   }
 
-  void _confirmarPedido() {
+  int? _extractUserId(Map<String, dynamic>? claims) {
+    if (claims == null) return null;
+    final keys = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
+    for (final k in keys) {
+      final v = claims[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      final parsed = int.tryParse(v.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  Future<void> _confirmarPedido() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tu carrito está vacío')),
@@ -78,18 +95,15 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       return;
     }
 
-    // Requerir inicio de sesión antes de confirmar
+    // Requerir login
     if (!AuthService.instance.isLoggedIn()) {
-      Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)))
-          .then((_) {
-        if (AuthService.instance.isLoggedIn()) {
-          _confirmarPedido();
-        }
-      });
-      return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)),
+      );
+      if (!AuthService.instance.isLoggedIn()) return;
     }
 
+    // Requerir comprobante
     if (_voucherBytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Adjunta el comprobante del pago para continuar')),
@@ -97,22 +111,72 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       return;
     }
 
-    // UI local (si luego conectas API, este es el sitio)
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Pedido confirmado'),
-        content: Text(
-          'Tu pedido $_orderId fue confirmado.\n\n'
-          'Monto recibido: \$${_montoAPagar.toStringAsFixed(2)} '
-          '(${_pagoSeleccionado == 0 ? '50%' : '100%'}).\n'
-          'Nos pondremos en contacto para coordinar la entrega. 💐',
+    final userId = _extractUserId(AuthService.instance.claims);
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo identificar al usuario')),
+      );
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
+      // 1) Envía el pedido al backend
+      final resp = await PedidoApi.crearPedido(
+        userId: userId,
+        fecha: DateTime.now(),
+        subtotal: _subtotal,
+        iva: _iva,
+        total: _total,
+        items: _items,
+        comprobanteBytes: _voucherBytes,
+        estado: 'PEN', // PENDIENTE
+      );
+
+
+      if (!mounted) return;
+
+      final serverId = (resp['id'] ?? resp['pedidoId'] ?? resp['orderId'] ?? '—').toString();
+
+      // 2) Mostrar diálogo de éxito con CTA
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('¡Pedido enviado!'),
+          content: Text(
+            'Tu pedido fue registrado con ID $serverId.\n'
+            'Referencia local: $_orderId\n\n'
+            'Monto recibido: \$${_montoAPagar.toStringAsFixed(2)} '
+            '(${_pagoSeleccionado == 0 ? '50%' : '100%'}). '
+            'Quedará en estado PENDIENTE hasta la revisión.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx); // cierra el diálogo
+                // 3) AHORA limpiamos el carrito (localStorage + notifiers)
+                _cart.clear();
+                // 4) Volver a Home (o pop a la raíz)
+                Navigator.of(context).popUntil((route) => route.isFirst);
+                // 5) Feedback final
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Carrito vacío. ¡Gracias por tu compra!')),
+                );
+              },
+              child: const Text('OK'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-        ],
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo registrar el pedido: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -200,7 +264,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Método de pago
+              // Pago
               _SectionTitle('Pago'),
               const SizedBox(height: 8),
               Card(
@@ -212,7 +276,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     RadioListTile<int>(
                       value: 0,
                       groupValue: _pagoSeleccionado,
-                      onChanged: (v) => setState(() => _pagoSeleccionado = v ?? 0),
+                      onChanged: _sending ? null : (v) => setState(() => _pagoSeleccionado = v ?? 0),
                       title: const Text('Pagar 50% ahora'),
                       subtitle: Text('Monto: \$${(_total * 0.5).toStringAsFixed(2)}'),
                     ),
@@ -220,7 +284,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     RadioListTile<int>(
                       value: 1,
                       groupValue: _pagoSeleccionado,
-                      onChanged: (v) => setState(() => _pagoSeleccionado = v ?? 1),
+                      onChanged: _sending ? null : (v) => setState(() => _pagoSeleccionado = v ?? 1),
                       title: const Text('Pagar 100% ahora'),
                       subtitle: Text('Monto: \$${_total.toStringAsFixed(2)}'),
                     ),
@@ -271,7 +335,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _items.isEmpty ? null : _pickVoucher,
+                              onPressed: (_items.isEmpty || _sending) ? null : _pickVoucher,
                               icon: const Icon(Icons.upload),
                               label: const Text('Adjuntar imagen'),
                             ),
@@ -280,10 +344,12 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                           if (_voucherBytes != null)
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: () => setState(() {
-                                  _voucherFile = null;
-                                  _voucherBytes = null;
-                                }),
+                                onPressed: _sending
+                                    ? null
+                                    : () => setState(() {
+                                          _voucherFile = null;
+                                          _voucherBytes = null;
+                                        }),
                                 icon: const Icon(Icons.delete_outline),
                                 label: const Text('Quitar'),
                               ),
@@ -303,74 +369,6 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-
-              // Datos para transferencia
-              Card(
-                elevation: 0,
-                color: theme.colorScheme.surfaceContainerHighest,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Datos para transferencia',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(child: Text('Banco', style: theme.textTheme.bodyMedium)),
-                          Text('Pichincha', style: theme.textTheme.bodyMedium),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(child: Text('Tipo de cuenta', style: theme.textTheme.bodyMedium)),
-                          Text('Ahorros', style: theme.textTheme.bodyMedium),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Número de cuenta', style: theme.textTheme.bodyMedium),
-                                const SizedBox(height: 4),
-                                SelectableText(
-                                  '221045678',
-                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Titular: Ana Rodriguez',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Copiar número',
-                            icon: const Icon(Icons.copy),
-                            onPressed: () {
-                              Clipboard.setData(const ClipboardData(text: '221045678'));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Número de cuenta copiado')),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               const SizedBox(height: 16),
 
               // Botón confirmar
@@ -378,13 +376,15 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _items.isEmpty ? theme.disabledColor : kFucsia,
+                    backgroundColor: (_items.isEmpty || _sending) ? theme.disabledColor : kFucsia,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _items.isEmpty ? null : _confirmarPedido,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text('Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
+                  onPressed: (_items.isEmpty || _sending) ? null : _confirmarPedido,
+                  icon: _sending
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(_sending ? 'Enviando...' : 'Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -538,34 +538,17 @@ class _EmptyItems extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: Row(
           children: [
-            const Icon(Icons.shopping_cart_outlined, size: 56),
-            const SizedBox(height: 12),
-            Text(
-              'Tu carrito está vacío',
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Agrega algunos productos para continuar con tu pedido.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            Icon(Icons.remove_shopping_cart_outlined, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No hay productos en este pedido.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kFucsia,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              icon: const Icon(Icons.shop),
-              label: const Text('Seguir comprando'),
             ),
           ],
         ),

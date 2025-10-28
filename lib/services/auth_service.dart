@@ -24,6 +24,10 @@ class AuthService {
     if (_token != null) {
       try {
         _claims = Jwt.parseJwt(_token!);
+        // Si está expirado, limpia de una.
+        if (Jwt.isExpired(_token!)) {
+          await logout();
+        }
       } catch (_) {
         _claims = null;
       }
@@ -37,7 +41,10 @@ class AuthService {
     final res = await http
         .post(
           uri,
-          headers: {'Content-Type': 'application/json'},
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json', // <- recomendado
+          },
           body: jsonEncode({
             'Username': username,
             'Password': password,
@@ -54,7 +61,8 @@ class AuthService {
           token = (body['token'] ??
               body['Token'] ??
               body['accessToken'] ??
-              body['AccessToken'])?.toString();
+              body['AccessToken'])
+              ?.toString();
         }
       } catch (_) {
         // puede ser texto plano
@@ -115,7 +123,10 @@ class AuthService {
     final res = await http
         .post(
           uri,
-          headers: {"Content-Type": "application/json"},
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json", // <- recomendado
+          },
           body: jsonEncode(payload),
         )
         .timeout(const Duration(seconds: 20));
@@ -147,6 +158,7 @@ class AuthService {
   bool isLoggedIn() {
     if (_token == null) return false;
     return !isTokenExpired();
+    // También podrías chequear clame 'exp' manual, pero Jwt.isExpired ya hace eso.
   }
 
   /// Verifica expiración del JWT (exp en segundos desde epoch).
@@ -163,6 +175,7 @@ class AuthService {
   Map<String, String> authHeaders({Map<String, String>? extra}) {
     final headers = <String, String>{
       'Content-Type': 'application/json',
+      'Accept': 'application/json', // <- añade Accept siempre
     };
     if (_token != null) {
       headers['Authorization'] = 'Bearer $_token';
@@ -174,6 +187,21 @@ class AuthService {
   /// Accesores útiles
   String? get token => _token;
   Map<String, dynamic>? get claims => _claims;
+
+  /// ID de usuario a partir del JWT (admite varias claves típicas).
+  int? get currentUserId {
+    final c = _claims;
+    if (c == null) return null;
+    final candidates = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
+    for (final k in candidates) {
+      final v = c[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      final p = int.tryParse(v.toString());
+      if (p != null) return p;
+    }
+    return null;
+  }
 
   /// Ejemplo de GET autenticado (puedes copiar este patrón)
   Future<http.Response> getAuthed(String path) {
