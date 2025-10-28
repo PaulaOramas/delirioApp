@@ -4,7 +4,8 @@ import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/order_confirmation_screen.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
-import 'package:delirio_app/services/product_service.dart'; // <- NUEVO
+import 'package:delirio_app/services/product_service.dart';
+import 'package:delirio_app/screens/dashboard_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -271,8 +272,8 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: _CartTile(
                                 item: it,
-                                stock: max,                   // <- NUEVO
-                                reachedMax: reachedMax,       // <- NUEVO
+                                stock: max,                   // <- stock actual
+                                reachedMax: reachedMax,       // <- ya alcanzó el máximo
                                 onDec: _saving ? null : () => _decQty(it),
                                 onInc: _saving ? null : () => _incQty(it),
                                 onRemove: _saving ? null : () => _remove(it),
@@ -300,8 +301,8 @@ class _CartScreenState extends State<CartScreen> {
 
 class _CartTile extends StatelessWidget {
   final CartItem item;
-  final int stock;            // <- NUEVO
-  final bool reachedMax;      // <- NUEVO
+  final int stock;
+  final bool reachedMax;
   final VoidCallback? onDec;
   final VoidCallback? onInc;
   final VoidCallback? onRemove;
@@ -470,26 +471,150 @@ class _QtyButton extends StatelessWidget {
 
 // Widget que se muestra cuando el carrito está vacío
 class _EmptyState extends StatelessWidget {
-  final VoidCallback onExplore;
+  final VoidCallback onExplore; // no lo usamos, pero se mantiene por compatibilidad
   const _EmptyState({required this.onExplore});
+
+  void _goToDashboard(BuildContext context) {
+    // 1) Limpiar pila hasta la raíz
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    // 2) Abrir Dashboard
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-      child: Column(
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Center(
+        key: const ValueKey('empty-cart'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              elevation: 0,
+              color: theme.colorScheme.surfaceContainerHighest,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Ilustración
+                    Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            theme.colorScheme.primary.withOpacity(.12),
+                            theme.colorScheme.primary.withOpacity(.06),
+                          ],
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.shopping_bag_outlined, size: 44, color: kFucsia),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Título
+                    Text(
+                      'Tu carrito está vacío',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Subtítulo
+                    Text(
+                      'Explora ramos, plantas y detallitos. ¡Tenemos algo para cada ocasión! 🌸',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Micro-beneficios
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: const [
+                        _BenefitPill(icon: Icons.local_florist, label: 'Arreglos frescos'),
+                        _BenefitPill(icon: Icons.favorite_border, label: 'Regalos únicos'),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // CTA primario: va a Dashboard
+
+                    // CTA secundario: intenta volver una pantalla, si no, dashboard
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.home_outlined),
+                        label: const Text('Ir al inicio'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else {
+                            _goToDashboard(context);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ÚNICA clase de “chip” para evitar duplicados
+class _BenefitPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _BenefitPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(.6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.shopping_cart_outlined, size: 64, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(height: 16),
-          Text('Tu carrito está vacío', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text('Explora productos y agrégalos al carrito.', style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 16),
-          FilledButton.tonal(
-            onPressed: onExplore,
-            child: const Text('Explorar productos'),
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .2,
+            ),
           ),
         ],
       ),
@@ -565,7 +690,9 @@ class _SummaryCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton(
                 onPressed: (isLoading) ? null : onCheckout,
-                child: isLoading ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Confirmar pedido'),
+                child: isLoading
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Confirmar pedido'),
               ),
             ),
           ],
