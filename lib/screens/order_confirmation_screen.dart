@@ -50,7 +50,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     // Tomamos snapshot para que el resumen no cambie aunque modifiquen el carrito en otra vista
     _items = List.of(_cart.items.value);
     final now = DateTime.now();
-    _orderId = 'DLR-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
+    _orderId = 'EST-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
   }
 
   Future<void> _pickVoucher() async {

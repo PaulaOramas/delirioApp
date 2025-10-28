@@ -4,6 +4,9 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 
+// Añadir esta import para navegar al historial de pedidos
+import 'package:delirio_app/screens/order_history_screen.dart';
+
 // API y modelo
 import 'package:delirio_app/services/cliente_api.dart';
 import 'package:delirio_app/models/cliente_perfil.dart';
@@ -192,7 +195,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       title: const Text('Historial de pedidos'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
-                        // TODO
+                        // Navegar a la pantalla de historial de pedidos
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const OrderHistoryScreen()),
+                        );
                       },
                     ),
                   ],
@@ -395,67 +401,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 Future<ThemeMode?> showThemeModePicker(BuildContext context) {
   final theme = Theme.of(context);
-  // Determinar seleccionado actual
   final current = themeController.mode ??
       (theme.brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light);
 
   return showModalBottomSheet<ThemeMode>(
     context: context,
-    isScrollControlled: false,
+    isScrollControlled: true, // <- importante para permitir mayor alto + scroll
     showDragHandle: true,
     backgroundColor: theme.colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Apariencia',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+      final mq = MediaQuery.of(ctx);
+      final sheetMaxHeight = mq.size.height * 0.6; // ~60% de la pantalla
 
-            // Vista previa compacta
-            const _ThemePreviewRow(),
+      return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+          child: ListView( // <- scrollable, evita overflow
+            padding: EdgeInsets.fromLTRB(16, 8, 16, mq.viewPadding.bottom + 16),
+            children: [
+              Center(
+                child: Text(
+                  'Apariencia',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 12),
 
-            const SizedBox(height: 12),
-            const Divider(height: 1),
+              const _ThemePreviewRow(),
 
-            _ThemeOptionTile(
-              title: 'Sistema',
-              subtitle: 'Se ajusta al tema del dispositivo',
-              icon: Icons.phone_android,
-              selected: current == ThemeMode.system,
-              onTap: () => Navigator.pop(ctx, ThemeMode.system),
-            ),
-            const Divider(height: 1),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
 
-            _ThemeOptionTile(
-              title: 'Claro',
-              subtitle: 'Fondo claro, textos oscuros',
-              icon: Icons.wb_sunny_outlined,
-              selected: current == ThemeMode.light,
-              onTap: () => Navigator.pop(ctx, ThemeMode.light),
-            ),
-            const Divider(height: 1),
+              _ThemeOptionTile(
+                title: 'Sistema',
+                subtitle: 'Se ajusta al tema del dispositivo',
+                icon: Icons.phone_android,
+                selected: current == ThemeMode.system,
+                onTap: () => Navigator.pop(ctx, ThemeMode.system),
+              ),
+              const Divider(height: 1),
 
-            _ThemeOptionTile(
-              title: 'Oscuro',
-              subtitle: 'Fondo oscuro, descanso visual',
-              icon: Icons.nightlight_round,
-              selected: current == ThemeMode.dark,
-              onTap: () => Navigator.pop(ctx, ThemeMode.dark),
-            ),
+              _ThemeOptionTile(
+                title: 'Claro',
+                subtitle: 'Fondo claro, textos oscuros',
+                icon: Icons.wb_sunny_outlined,
+                selected: current == ThemeMode.light,
+                onTap: () => Navigator.pop(ctx, ThemeMode.light),
+              ),
+              const Divider(height: 1),
 
-            const SizedBox(height: 8),
-          ],
+              _ThemeOptionTile(
+                title: 'Oscuro',
+                subtitle: 'Fondo oscuro, descanso visual',
+                icon: Icons.nightlight_round,
+                selected: current == ThemeMode.dark,
+                onTap: () => Navigator.pop(ctx, ThemeMode.dark),
+              ),
+            ],
+          ),
         ),
       );
     },
   );
 }
+
 
 class _ThemeOptionTile extends StatelessWidget {
   final String title;
@@ -501,24 +514,30 @@ class _ThemeOptionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      )),
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      )),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
             ),
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: selected
-                  ? Icon(Icons.check_circle,
+                  ? Icon(
+                      Icons.check_circle,
                       key: const ValueKey('sel'),
-                      color: theme.colorScheme.primary)
+                      color: theme.colorScheme.primary,
+                    )
                   : const SizedBox.shrink(key: ValueKey('nosel')),
             ),
           ],
