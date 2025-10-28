@@ -2,8 +2,11 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
+
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
+import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
@@ -14,29 +17,15 @@ class OrderConfirmationScreen extends StatefulWidget {
 }
 
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
-  // 🔥 Datos quemados del pedido
-  final _order = _DummyOrder(
-    orderId: 'DLR-2025-00123',
-    fecha: DateTime.now(),
-    items: const [
-      _DummyItem(
-        nombre: 'Ramo Primavera',
-        categoria: 'Ramos Florales',
-        precio: 24.99,
-        qty: 1,
-        imagen: 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=800',
-      ),
-      _DummyItem(
-        nombre: 'Orquídea Blanca',
-        categoria: 'Plantas',
-        precio: 29.50,
-        qty: 1,
-        imagen: 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?w=800',
-      ),
-    ],
-    envio: 3.99,
-    ivaRate: 0.12, // Ecuador
-  );
+  // ====== Configuración de cálculo ======
+  static const double _ivaRate = 0.12; // 12% (EC)
+  static const double _envio = 3.99;
+
+  // Snapshot de ítems del carrito (tomado una sola vez al entrar)
+  late final List<CartItem> _items;
+
+  // Identificador local del pedido (visual)
+  late final String _orderId;
 
   // Pago: 0 = 50%, 1 = 100%
   int _pagoSeleccionado = 0;
@@ -46,10 +35,19 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   XFile? _voucherFile;
   Uint8List? _voucherBytes;
 
-  double get _subtotal => _order.items.fold(0.0, (s, it) => s + it.precio * it.qty);
-  double get _iva => _subtotal * _order.ivaRate;
-  double get _total => _subtotal + _iva + _order.envio;
+  // ====== Cálculos ======
+  double get _subtotal => _items.fold(0.0, (s, it) => s + (it.precio * it.qty));
+  double get _iva => _subtotal * _ivaRate;
+  double get _total => _subtotal + _iva + _envio;
   double get _montoAPagar => _pagoSeleccionado == 0 ? (_total * 0.5) : _total;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List.of(CartService().items.value); // snapshot inmutable
+    final now = DateTime.now();
+    _orderId = 'EST-${now.year}${_pad2(now.month)}${_pad2(now.day)}-${now.millisecondsSinceEpoch % 100000}';
+  }
 
   Future<void> _pickVoucher() async {
     try {
@@ -60,10 +58,12 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
         _voucherFile = file;
         _voucherBytes = bytes;
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Comprobante adjuntado')),
       );
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo adjuntar la imagen')),
       );
@@ -71,14 +71,19 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   }
 
   void _confirmarPedido() {
-    // Requerir inicio de sesión antes de confirmar el pedido
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tu carrito está vacío')),
+      );
+      return;
+    }
+
+    // Requerir inicio de sesión antes de confirmar
     if (!AuthService.instance.isLoggedIn()) {
-      // Abrir LoginScreen y esperar resultado. Si el usuario no inicia sesión, abortamos.
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)))
-          .then((res) {
+          .then((_) {
         if (AuthService.instance.isLoggedIn()) {
-          // Si ahora está autenticado, intentamos confirmar de nuevo (el usuario sigue en la misma pantalla)
           _confirmarPedido();
         }
       });
@@ -92,13 +97,13 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       return;
     }
 
-    // UI-only: feedback
+    // UI local (si luego conectas API, este es el sitio)
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Pedido confirmado'),
         content: Text(
-          'Tu pedido ${_order.orderId} fue confirmado.\n\n'
+          'Tu pedido $_orderId fue confirmado.\n\n'
           'Monto recibido: \$${_montoAPagar.toStringAsFixed(2)} '
           '(${_pagoSeleccionado == 0 ? '50%' : '100%'}).\n'
           'Nos pondremos en contacto para coordinar la entrega. 💐',
@@ -146,10 +151,10 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Pedido #${_order.orderId}',
+                            Text('Pedido #$_orderId',
                                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 2),
-                            Text('Fecha: ${_fmtDate(_order.fecha)}',
+                            Text('Fecha: ${_fmtDate(DateTime.now())}',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 )),
@@ -165,12 +170,10 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               // Items
               _SectionTitle('Productos'),
               const SizedBox(height: 8),
-              ..._order.items
-                  .map((it) => _ItemTile(
-                        item: it,
-                        onTap: () {},
-                      ))
-                  .toList(),
+              if (_items.isEmpty)
+                const _EmptyItems()
+              else
+                ..._items.map((it) => _ItemTile(item: it, onTap: () {})).toList(),
               const SizedBox(height: 12),
 
               // Resumen
@@ -186,9 +189,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     children: [
                       _row('Subtotal', _subtotal),
                       const SizedBox(height: 6),
-                      _row('IVA (${(_order.ivaRate * 100).toStringAsFixed(0)}%)', _iva),
+                      _row('IVA (${(_ivaRate * 100).toStringAsFixed(0)}%)', _iva),
                       const SizedBox(height: 6),
-                      _row('Envío', _order.envio),
+                      _row('Envío', _envio),
                       const Divider(height: 22),
                       _row('Total', _total, bold: true, fucsia: true),
                     ],
@@ -268,7 +271,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _pickVoucher,
+                              onPressed: _items.isEmpty ? null : _pickVoucher,
                               icon: const Icon(Icons.upload),
                               label: const Text('Adjuntar imagen'),
                             ),
@@ -300,6 +303,74 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Datos para transferencia
+              Card(
+                elevation: 0,
+                color: theme.colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Datos para transferencia',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(child: Text('Banco', style: theme.textTheme.bodyMedium)),
+                          Text('Pichincha', style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: Text('Tipo de cuenta', style: theme.textTheme.bodyMedium)),
+                          Text('Ahorros', style: theme.textTheme.bodyMedium),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Número de cuenta', style: theme.textTheme.bodyMedium),
+                                const SizedBox(height: 4),
+                                SelectableText(
+                                  '221045678',
+                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Titular: Ana Rodriguez',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Copiar número',
+                            icon: const Icon(Icons.copy),
+                            onPressed: () {
+                              Clipboard.setData(const ClipboardData(text: '221045678'));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Número de cuenta copiado')),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
 
               // Botón confirmar
@@ -307,11 +378,11 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: kFucsia,
+                    backgroundColor: _items.isEmpty ? theme.disabledColor : kFucsia,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _confirmarPedido,
+                  onPressed: _items.isEmpty ? null : _confirmarPedido,
                   icon: const Icon(Icons.check_circle_outline),
                   label: Text('Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
                 ),
@@ -331,6 +402,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     );
   }
 
+  // ===== Helpers =====
   Widget _row(String label, double value, {bool bold = false, bool fucsia = false}) {
     return Row(
       children: [
@@ -352,7 +424,11 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     final day = d.day.toString().padLeft(2, '0');
     return '$day/$m/$y';
   }
+
+  String _pad2(int n) => n.toString().padLeft(2, '0');
 }
+
+// ======= Widgets auxiliares =======
 
 class _SectionTitle extends StatelessWidget {
   final String text;
@@ -372,7 +448,7 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _ItemTile extends StatelessWidget {
-  final _DummyItem item;
+  final CartItem item;
   final VoidCallback onTap;
 
   const _ItemTile({required this.item, required this.onTap});
@@ -380,6 +456,8 @@ class _ItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final img = (item.imagen ?? '').trim();
+
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
@@ -393,15 +471,24 @@ class _ItemTile extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Image.network(
-                    item.imagen,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: theme.colorScheme.surfaceVariant,
-                      child: const Icon(Icons.local_florist, size: 28),
-                    ),
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: (img.isEmpty)
+                        ? Container(
+                            color: theme.colorScheme.surfaceVariant,
+                            child: const Icon(Icons.local_florist, size: 28),
+                          )
+                        : Image.network(
+                            img,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: theme.colorScheme.surfaceVariant,
+                              child: const Icon(Icons.local_florist, size: 28),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -410,15 +497,19 @@ class _ItemTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.nombre,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      item.nombre,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 2),
-                    Text(item.categoria,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        )),
+                    Text(
+                      item.categoria,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       '\$${item.precio.toStringAsFixed(2)}  ×  ${item.qty}',
@@ -435,35 +526,50 @@ class _ItemTile extends StatelessWidget {
   }
 }
 
-// --------- Modelos de demo (quemados) ----------
-class _DummyOrder {
-  final String orderId;
-  final DateTime fecha;
-  final List<_DummyItem> items;
-  final double envio;
-  final double ivaRate;
+class _EmptyItems extends StatelessWidget {
+  const _EmptyItems();
 
-  const _DummyOrder({
-    required this.orderId,
-    required this.fecha,
-    required this.items,
-    required this.envio,
-    required this.ivaRate,
-  });
-}
-
-class _DummyItem {
-  final String nombre;
-  final String categoria;
-  final double precio;
-  final int qty;
-  final String imagen;
-
-  const _DummyItem({
-    required this.nombre,
-    required this.categoria,
-    required this.precio,
-    required this.qty,
-    required this.imagen,
-  });
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Icon(Icons.shopping_cart_outlined, size: 56),
+            const SizedBox(height: 12),
+            Text(
+              'Tu carrito está vacío',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Agrega algunos productos para continuar con tu pedido.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kFucsia,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              icon: const Icon(Icons.shop),
+              label: const Text('Seguir comprando'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

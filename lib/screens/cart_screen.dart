@@ -3,7 +3,6 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/order_confirmation_screen.dart';
 import 'package:delirio_app/services/auth_service.dart';
-import 'package:delirio_app/services/cart_api.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -16,7 +15,7 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   final cart = CartService();
 
-  // Ajustes de cálculo
+  // Ajustes de cálculo (no cambian tu lógica de storage)
   static const double _ivaRate = 0.12; // 12% (EC)
   static const double _envio = 3.99;   // envío fijo de ejemplo
 
@@ -28,9 +27,8 @@ class _CartScreenState extends State<CartScreen> {
   double _total(List<CartItem> items) =>
       (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items) + _envio);
 
+  // Subir/bajar cantidades (con notifyListeners para refrescar otros listeners)
   void _incQty(CartItem it) {
-    // Actualiza la cantidad y notifica al ValueNotifier para que todos los
-    // escuchadores (incluyendo otros widgets) se refresquen correctamente.
     setState(() => it.qty = (it.qty + 1).clamp(1, 99));
     cart.items.notifyListeners();
   }
@@ -41,73 +39,47 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _remove(CartItem it) => cart.removeItem(it.id);
-
   void _clearCart() => cart.clear();
 
-  int? _extractUserId(Map<String, dynamic>? claims) {
-    if (claims == null) return null;
-    final candidates = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
-    for (final k in candidates) {
-      final v = claims[k];
-      if (v == null) continue;
-      if (v is int) return v;
-      final parsed = int.tryParse(v.toString());
-      if (parsed != null) return parsed;
+  // Si quieres forzar login antes de ir a confirmar, usa este helper
+  Future<bool> _ensureLoggedIn() async {
+    if (AuthService.instance.isLoggedIn()) return true;
+    final goLogin = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Inicia sesión'),
+        content: const Text('Necesitas iniciar sesión para completar tu pedido.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Iniciar sesión')),
+        ],
+      ),
+    );
+    if (goLogin == true) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)),
+      );
+      setState(() {});
     }
-    return null;
+    return AuthService.instance.isLoggedIn();
   }
 
-  Future<void> _checkout(List<CartItem> items) async {
-    final auth = AuthService.instance;
-    final claims = auth.claims;
-    final userId = _extractUserId(claims);
-
-    if (!auth.isLoggedIn() || userId == null) {
-      final goLogin = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Inicia sesión'),
-          content: const Text('Necesitas iniciar sesión para completar tu pedido.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Iniciar sesión')),
-          ],
-        ),
+  void _goToConfirmation(List<CartItem> items) async {
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tu carrito está vacío')),
       );
-      if (goLogin == true) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)),
-        );
-        setState(() {});
-      }
       return;
     }
 
-    setState(() => _saving = true);
-    try {
-      // Envía al backend
-      await CartApi.agregarCarrito(userId: userId, items: items);
+    // Si quieres requerir login ANTES de la confirmación, descomenta:
+    final ok = await _ensureLoggedIn();
+    if (!ok) return;
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pedido enviado ✅')),
-      );
-
-      // Limpia el carrito local si tu backend persiste el pedido
-      _clearCart();
-
-      // Navega a confirmación
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo procesar el pedido: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+    // Navega: la pantalla de confirmación leerá el snapshot del carrito local
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
+    );
   }
 
   @override
@@ -191,7 +163,7 @@ class _CartScreenState extends State<CartScreen> {
                         envio: _envio,
                         total: _total(items),
                         isLoading: _saving,
-                        onCheckout: _saving ? null : () => _checkout(items),
+                        onCheckout: _saving ? null : () => _goToConfirmation(items),
                       ),
                     ],
                   );
@@ -219,6 +191,8 @@ class _CartTile extends StatelessWidget {
   Widget build(BuildContext context) {
     try {
       final theme = Theme.of(context);
+      final img = (item.imagen ?? '').trim();
+
       return Card(
         elevation: 0,
         color: theme.colorScheme.surfaceContainerHighest,
@@ -227,33 +201,27 @@ class _CartTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Imagen (si no hay URL válida, mostramos un placeholder local)
+              // Imagen segura (placeholder si no hay URL)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                // AspectRatio requiere constraints; envolvemos en SizedBox fijo para evitar 'unconstrained'
                 child: SizedBox(
                   width: 72,
                   height: 72,
                   child: AspectRatio(
                     aspectRatio: 1,
-                    child: Builder(builder: (context) {
-                      final url = item.imagen?.trim();
-                      if (url == null || url.isEmpty) {
-                        return Container(
-                          color: theme.colorScheme.surfaceVariant,
-                          child: const Icon(Icons.local_florist, size: 28),
-                        );
-                      }
-
-                      return Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: theme.colorScheme.surfaceVariant,
-                          child: const Icon(Icons.local_florist, size: 28),
-                        ),
-                      );
-                    }),
+                    child: img.isEmpty
+                        ? Container(
+                            color: theme.colorScheme.surfaceVariant,
+                            child: const Icon(Icons.local_florist, size: 28),
+                          )
+                        : Image.network(
+                            img,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: theme.colorScheme.surfaceVariant,
+                              child: const Icon(Icons.local_florist, size: 28),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -309,9 +277,6 @@ class _CartTile extends StatelessWidget {
         ),
       );
     } catch (e, st) {
-      // Evitar que un error de renderización (null inesperado, etc.) bloquee
-      // toda la pantalla del carrito. Logueamos y mostramos un placeholder.
-      // En Flutter Web esto aparecerá en la consola JS (js_primitives).
       debugPrint('Cart tile build error: $e\n$st');
       return Card(
         color: Colors.red.shade50,
