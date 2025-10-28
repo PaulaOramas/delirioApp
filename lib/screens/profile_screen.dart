@@ -28,11 +28,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userId = _extractUserId(claims);
 
     // 2) Placeholders inmediatos desde claims
-    final displayNameFromClaims = (claims?['nombre'] ?? claims?['Nombre'] ?? 'Nombre de usuario').toString();
-    final emailFromClaims = (claims?['email'] ?? claims?['Correo'] ?? 'user@example.com').toString();
+    final displayNameFromClaims =
+        (claims?['nombre'] ?? claims?['Nombre'] ?? 'Nombre de usuario').toString();
+    final emailFromClaims =
+        (claims?['email'] ?? claims?['Correo'] ?? 'user@example.com').toString();
     final photoFromClaims = (claims?['foto'] ?? claims?['Foto'])?.toString();
 
     final loggedIn = auth.isLoggedIn();
+    final bool isGuest = !loggedIn || userId == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -46,9 +49,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (loggedIn && userId != null)
+              // ===== Header =====
+              if (!isGuest)
                 FutureBuilder<ClientePerfil>(
-                  future: ClienteApi.getPerfilById(userId),
+                  future: ClienteApi.getPerfilById(userId!),
                   builder: (context, snapshot) {
                     // Defaults (claims) mientras carga o si falla
                     var name = displayNameFromClaims;
@@ -71,11 +75,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
 
                     if (snapshot.hasError) {
-                      // aviso suave si falla
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('No se pudo cargar el perfil: ${snapshot.error}')),
+                            SnackBar(
+                              content: Text('No se pudo cargar el perfil: ${snapshot.error}'),
+                            ),
                           );
                         }
                       });
@@ -96,57 +101,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     );
                   },
                 )
-              else ...[
-                _ProfileHeader(
-                  name: displayNameFromClaims,
-                  email: emailFromClaims,
-                  photoUrl: photoFromClaims,
-                  onEdit: _onEditTap,
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context)
-                          .push(MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)))
-                          .then((_) {
-                        if (AuthService.instance.isLoggedIn() && mounted) setState(() {});
-                      });
-                    },
-                    child: const Text('Iniciar sesión'),
+              else
+                // ===== Empty state para invitados =====
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 16),
+                  alignment: Alignment.center,
+                  child: Column(
+                    children: [
+                      const Icon(Icons.account_circle_outlined, size: 100, color: Colors.grey),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Inicia sesión para personalizar tu experiencia 🌸',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Guarda tus pedidos, direcciones y preferencias fácilmente.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // Botón principal: iniciar sesión
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          icon: const Icon(Icons.login),
+                          label: const Text('Iniciar sesión'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context)
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginScreen(
+                                      replaceWithMainOnSuccess: false,
+                                    ),
+                                  ),
+                                )
+                                .then((_) {
+                              if (AuthService.instance.isLoggedIn() && mounted) setState(() {});
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Botón secundario: crear cuenta
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
+                          label: const Text('Crear cuenta'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(color: theme.colorScheme.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            // TODO: navegar a RegisterScreen
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-              ],
 
               const SizedBox(height: 16),
 
-              _SectionCard(
-                title: 'Cuenta',
-                tiles: [
-                  ListTile(
-                    leading: const Icon(Icons.receipt_long),
-                    title: const Text('Historial de pedidos'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: const Text('Direcciones'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.credit_card),
-                    title: const Text('Métodos de pago'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
-                  ),
-                ],
-              ),
+              // ===== Sección Cuenta (solo si está logueado) =====
+              if (!isGuest)
+                _SectionCard(
+                  title: 'Cuenta',
+                  tiles: [
+                    ListTile(
+                      leading: const Icon(Icons.receipt_long),
+                      title: const Text('Historial de pedidos'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        // TODO
+                      },
+                    ),
+                  ],
+                ),
 
-              const SizedBox(height: 16),
+              if (!isGuest) const SizedBox(height: 16),
 
+              // ===== Preferencias (siempre visible) =====
               _SectionCard(
                 title: 'Preferencias',
                 tiles: [
@@ -154,7 +205,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     secondary: const Icon(Icons.notifications_active_outlined),
                     title: const Text('Notificaciones'),
                     value: true, // TODO: enlazar a tu estado
-                    onChanged: (v) {},
+                    onChanged: (v) {
+                      // TODO: guardar preferencia
+                    },
                   ),
                   ListTile(
                     leading: const Icon(Icons.palette_outlined),
@@ -191,13 +244,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: const Icon(Icons.lock_outline),
                     title: const Text('Privacidad y seguridad'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
+                    onTap: () {
+                      // TODO
+                    },
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
 
+              // ===== Ayuda (siempre visible) =====
               _SectionCard(
                 title: 'Ayuda',
                 tiles: [
@@ -205,28 +261,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: const Icon(Icons.help_outline),
                     title: const Text('Centro de ayuda'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
+                    onTap: () {
+                      // TODO
+                    },
                   ),
                   ListTile(
                     leading: const Icon(Icons.description_outlined),
                     title: const Text('Términos y condiciones'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
+                    onTap: () {
+                      // TODO
+                    },
                   ),
                 ],
               ),
 
               const SizedBox(height: 24),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
-                  side: BorderSide(color: theme.colorScheme.error),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+
+              // ===== Botón Cerrar sesión (solo si está logueado) =====
+              if (!isGuest)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                    side: BorderSide(color: theme.colorScheme.error),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () => _confirmLogout(context),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Cerrar sesión'),
                 ),
-                onPressed: () => _confirmLogout(context),
-                icon: const Icon(Icons.logout),
-                label: const Text('Cerrar sesión'),
-              ),
             ],
           ),
         ),
@@ -273,9 +336,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Icon(Icons.logout, size: 36),
               const SizedBox(height: 12),
-              Text('¿Cerrar sesión?', style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
+              Text(
+                '¿Cerrar sesión?',
+                style: theme.textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
-              const Text('Tendrás que iniciar sesión nuevamente para continuar.', textAlign: TextAlign.center),
+              const Text(
+                'Tendrás que iniciar sesión nuevamente para continuar.',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
