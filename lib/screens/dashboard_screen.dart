@@ -137,7 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DeLirio')),
+      appBar: AppBar(title: const Text('Estatus')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.of(context)

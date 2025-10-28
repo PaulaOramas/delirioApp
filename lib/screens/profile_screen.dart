@@ -1,21 +1,38 @@
+// lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+// API y modelo
+import 'package:delirio_app/services/cliente_api.dart';
+import 'package:delirio_app/models/cliente_perfil.dart';
+
+// NOTA: themeController debe exportarse desde lib/theme.dart
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final auth = AuthService.instance;
     final claims = auth.claims;
-    
-    // Obtener datos del usuario desde claims
-    final displayName = claims?['nombre'] ?? 'Nombre de usuario';
-    final email = claims?['email'] ?? 'user@example.com';
-    final photoUrl = claims?['foto']; // puede ser null
+
+    // 1) ID robusto desde claims (evita nulos por claves distintas)
+    final userId = _extractUserId(claims);
+
+    // 2) Placeholders inmediatos desde claims
+    final displayNameFromClaims = (claims?['nombre'] ?? claims?['Nombre'] ?? 'Nombre de usuario').toString();
+    final emailFromClaims = (claims?['email'] ?? claims?['Correo'] ?? 'user@example.com').toString();
+    final photoFromClaims = (claims?['foto'] ?? claims?['Foto'])?.toString();
+
+    final loggedIn = auth.isLoggedIn();
 
     return Scaffold(
       appBar: AppBar(
@@ -29,18 +46,81 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ProfileHeader(
-                name: displayName,
-                email: email,
-                photoUrl: photoUrl,
-                onEdit: () {
-                  // TODO: Navegar a EditarPerfil
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Próximamente: Editar perfil')),
-                  );
-                },
-              ),
+              if (loggedIn && userId != null)
+                FutureBuilder<ClientePerfil>(
+                  future: ClienteApi.getPerfilById(userId),
+                  builder: (context, snapshot) {
+                    // Defaults (claims) mientras carga o si falla
+                    var name = displayNameFromClaims;
+                    var email = emailFromClaims;
+                    var photo = photoFromClaims;
+
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Column(
+                        children: [
+                          _ProfileHeader(
+                            name: name,
+                            email: email,
+                            photoUrl: photo,
+                            onEdit: _onEditTap,
+                          ),
+                          const SizedBox(height: 8),
+                          const LinearProgressIndicator(),
+                        ],
+                      );
+                    }
+
+                    if (snapshot.hasError) {
+                      // aviso suave si falla
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('No se pudo cargar el perfil: ${snapshot.error}')),
+                          );
+                        }
+                      });
+                    }
+
+                    if (snapshot.hasData) {
+                      final p = snapshot.data!;
+                      if (p.nombreCompleto.isNotEmpty) name = p.nombreCompleto;
+                      if (p.correo.isNotEmpty) email = p.correo;
+                      if ((p.foto ?? '').toString().isNotEmpty) photo = p.foto;
+                    }
+
+                    return _ProfileHeader(
+                      name: name,
+                      email: email,
+                      photoUrl: photo,
+                      onEdit: _onEditTap,
+                    );
+                  },
+                )
+              else ...[
+                _ProfileHeader(
+                  name: displayNameFromClaims,
+                  email: emailFromClaims,
+                  photoUrl: photoFromClaims,
+                  onEdit: _onEditTap,
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)))
+                          .then((_) {
+                        if (AuthService.instance.isLoggedIn() && mounted) setState(() {});
+                      });
+                    },
+                    child: const Text('Iniciar sesión'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+
               const SizedBox(height: 16),
+
               _SectionCard(
                 title: 'Cuenta',
                 tiles: [
@@ -48,29 +128,25 @@ class ProfileScreen extends StatelessWidget {
                     leading: const Icon(Icons.receipt_long),
                     title: const Text('Historial de pedidos'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Navegar a historial
-                    },
+                    onTap: () {},
                   ),
                   ListTile(
                     leading: const Icon(Icons.location_on_outlined),
                     title: const Text('Direcciones'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Navegar a direcciones
-                    },
+                    onTap: () {},
                   ),
                   ListTile(
                     leading: const Icon(Icons.credit_card),
                     title: const Text('Métodos de pago'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Navegar a pagos
-                    },
+                    onTap: () {},
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
+
               _SectionCard(
                 title: 'Preferencias',
                 tiles: [
@@ -78,9 +154,7 @@ class ProfileScreen extends StatelessWidget {
                     secondary: const Icon(Icons.notifications_active_outlined),
                     title: const Text('Notificaciones'),
                     value: true, // TODO: enlazar a tu estado
-                    onChanged: (v) {
-                      // TODO: guardar preferencia
-                    },
+                    onChanged: (v) {},
                   ),
                   ListTile(
                     leading: const Icon(Icons.palette_outlined),
@@ -109,7 +183,7 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       );
                       if (result != null) {
-                        themeController.setMode(result);
+                        themeController.setMode(result); // provisto por tu app
                       }
                     },
                   ),
@@ -117,13 +191,13 @@ class ProfileScreen extends StatelessWidget {
                     leading: const Icon(Icons.lock_outline),
                     title: const Text('Privacidad y seguridad'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Navegar a privacidad
-                    },
+                    onTap: () {},
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
+
               _SectionCard(
                 title: 'Ayuda',
                 tiles: [
@@ -131,20 +205,17 @@ class ProfileScreen extends StatelessWidget {
                     leading: const Icon(Icons.help_outline),
                     title: const Text('Centro de ayuda'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: Navegar a ayuda
-                    },
+                    onTap: () {},
                   ),
                   ListTile(
                     leading: const Icon(Icons.description_outlined),
                     title: const Text('Términos y condiciones'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // TODO: abrir términos
-                    },
+                    onTap: () {},
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
@@ -161,6 +232,25 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _onEditTap() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Próximamente: Editar perfil')),
+    );
+  }
+
+  int? _extractUserId(Map<String, dynamic>? claims) {
+    if (claims == null) return null;
+    final candidates = ['id', 'Id', 'userId', 'UserId', 'nameid', 'nameId', 'sub'];
+    for (final k in candidates) {
+      final v = claims[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      final parsed = int.tryParse(v.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -183,16 +273,9 @@ class ProfileScreen extends StatelessWidget {
             children: [
               const Icon(Icons.logout, size: 36),
               const SizedBox(height: 12),
-              Text(
-                '¿Cerrar sesión?',
-                style: theme.textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
+              Text('¿Cerrar sesión?', style: theme.textTheme.titleLarge, textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              const Text(
-                'Tendrás que iniciar sesión nuevamente para continuar.',
-                textAlign: TextAlign.center,
-              ),
+              const Text('Tendrás que iniciar sesión nuevamente para continuar.', textAlign: TextAlign.center),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -231,6 +314,8 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 }
+
+// ====== UI helpers ======
 
 class _ProfileHeader extends StatelessWidget {
   final String name;
@@ -277,19 +362,21 @@ class _ProfileHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    name,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
-                  Text(email,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    email,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -350,5 +437,4 @@ class _SectionCard extends StatelessWidget {
     }
     return list;
   }
-}
 }
