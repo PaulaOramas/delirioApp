@@ -8,11 +8,13 @@ enum OrderStatus { pendiente, aceptado, rechazado }
 
 class OrderSummary {
   final DateTime createdAt;
+  final DateTime? pickupAt; // opcional: fecha/hora de retiro si la tuvieses en backend
   final OrderStatus status;
   final double total;
 
   OrderSummary({
     required this.createdAt,
+    this.pickupAt,
     required this.status,
     required this.total,
   });
@@ -30,35 +32,48 @@ String _formatOrderCode(DateTime now) {
 extension OrderStatusX on OrderStatus {
   String get label {
     switch (this) {
-      case OrderStatus.pendiente: return 'Pendiente';
-      case OrderStatus.aceptado:  return 'Aceptado';
-      case OrderStatus.rechazado: return 'Rechazado';
+      case OrderStatus.pendiente:
+        return 'Pendiente';
+      case OrderStatus.aceptado:
+        return 'Aceptado';
+      case OrderStatus.rechazado:
+        return 'Rechazado';
     }
   }
 
   IconData get icon {
     switch (this) {
-      case OrderStatus.pendiente: return Icons.schedule_outlined;
-      case OrderStatus.aceptado:  return Icons.check_circle_outline;
-      case OrderStatus.rechazado: return Icons.cancel_outlined;
+      case OrderStatus.pendiente:
+        return Icons.schedule_outlined;
+      case OrderStatus.aceptado:
+        return Icons.check_circle_outline;
+      case OrderStatus.rechazado:
+        return Icons.cancel_outlined;
     }
   }
 
+  // Colores del chip por estado
   Color bg(BuildContext ctx) {
     final cs = Theme.of(ctx).colorScheme;
     switch (this) {
-      case OrderStatus.pendiente: return cs.surfaceVariant;
-      case OrderStatus.aceptado:  return cs.primary.withOpacity(.12);
-      case OrderStatus.rechazado: return cs.errorContainer;
+      case OrderStatus.pendiente:
+        return Colors.amber.withOpacity(.25); // amarillo suave
+      case OrderStatus.aceptado:
+        return kVerdeHoja.withOpacity(.18); // verde suave de tu paleta
+      case OrderStatus.rechazado:
+        return cs.errorContainer; // rojo claro del tema
     }
   }
 
   Color fg(BuildContext ctx) {
     final cs = Theme.of(ctx).colorScheme;
     switch (this) {
-      case OrderStatus.pendiente: return cs.onSurfaceVariant;
-      case OrderStatus.aceptado:  return cs.primary;
-      case OrderStatus.rechazado: return cs.onErrorContainer;
+      case OrderStatus.pendiente:
+        return Colors.amber[900] ?? Colors.brown; // texto amarillo oscuro
+      case OrderStatus.aceptado:
+        return kVerdeHoja; // texto verde
+      case OrderStatus.rechazado:
+        return cs.onErrorContainer; // texto para fondo de error
     }
   }
 }
@@ -74,6 +89,7 @@ class OrderHistoryScreen extends StatefulWidget {
 
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   late Future<List<OrderSummary>> _future;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -89,21 +105,25 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     return [
       OrderSummary(
         createdAt: now.subtract(const Duration(minutes: 35)),
+        pickupAt: _withTime(now, hour: 12, minute: 0),
         status: OrderStatus.pendiente,
         total: 26.98,
       ),
       OrderSummary(
         createdAt: now.subtract(const Duration(days: 2, hours: 3)),
+        pickupAt: _withTime(now.subtract(const Duration(days: 1)), hour: 10, minute: 30),
         status: OrderStatus.aceptado,
         total: 42.15,
       ),
       OrderSummary(
         createdAt: now.subtract(const Duration(days: 4, hours: 5)),
+        pickupAt: _withTime(now.subtract(const Duration(days: 3)), hour: 18, minute: 0),
         status: OrderStatus.rechazado,
         total: 18.50,
       ),
       OrderSummary(
         createdAt: now.subtract(const Duration(days: 8, hours: 2)),
+        pickupAt: _withTime(now.subtract(const Duration(days: 7)), hour: 11, minute: 0),
         status: OrderStatus.aceptado,
         total: 55.40,
       ),
@@ -111,10 +131,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   }
 
   Future<void> _refresh() async {
+    if (_refreshing) return;
     setState(() {
+      _refreshing = true;
       _future = _loadMock();
     });
     await _future;
+    if (!mounted) return;
+    setState(() => _refreshing = false);
   }
 
   @override
@@ -129,7 +153,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       body: FutureBuilder<List<OrderSummary>>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+          if (snap.connectionState == ConnectionState.waiting && !_hasData(snap)) {
             return const _LoadingList();
           }
           if (snap.hasError) {
@@ -149,23 +173,25 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (ctx, i) {
-                final it = items[i];
-                return _OrderCard(item: it);
-              },
+              itemBuilder: (ctx, i) => _OrderCard(item: items[i]),
             ),
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _refresh(),
-        icon: const Icon(Icons.refresh),
-        label: const Text('Actualizar'),
+        onPressed: _refreshing ? null : _refresh,
+        icon: _refreshing
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.refresh),
+        label: Text(_refreshing ? 'Actualizando...' : 'Actualizar'),
         backgroundColor: kFucsia,
         foregroundColor: Colors.white,
       ),
     );
   }
+
+  bool _hasData(AsyncSnapshot<List<OrderSummary>> snap) =>
+      snap.hasData && (snap.data?.isNotEmpty ?? false);
 }
 
 /// ===== Widgets =====
@@ -188,7 +214,6 @@ class _OrderCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          // Aquí podrías navegar a detalle si luego lo implementas
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Pedido $code')),
           );
@@ -217,25 +242,29 @@ class _OrderCard extends StatelessWidget {
                     // Order code
                     Text(
                       code,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    // Fecha y total
+                    // Fecha, retiro y total
                     Row(
                       children: [
-                        Text(
-                          '$date • $time',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                        Flexible(
+                          child: Text(
+                            '$date • $time'
+                            '${item.pickupAt != null ? ' • Retiro: ${_formatDate(item.pickupAt!)} ${_formatTime(item.pickupAt!)}' : ''}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         Text(
                           '\$${item.total.toStringAsFixed(2)}',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
                             color: kFucsia,
                           ),
                         ),
@@ -329,8 +358,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(Icons.receipt_long_outlined, size: 72, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text('Aún no tienes pedidos',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              'Aún no tienes pedidos',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 6),
             Text(
               'Cuando realices tu primer pedido, aparecerá aquí.',
@@ -386,8 +417,9 @@ class _ErrorState extends StatelessWidget {
 
 String _two(int n) => n.toString().padLeft(2, '0');
 
-String _formatDate(DateTime dt) =>
-    '${_two(dt.day)}/${_two(dt.month)}/${dt.year}';
+String _formatDate(DateTime dt) => '${_two(dt.day)}/${_two(dt.month)}/${dt.year}';
 
-String _formatTime(DateTime dt) =>
-    '${_two(dt.hour)}:${_two(dt.minute)}';
+String _formatTime(DateTime dt) => '${_two(dt.hour)}:${_two(dt.minute)}';
+
+DateTime _withTime(DateTime base, {required int hour, required int minute}) =>
+    DateTime(base.year, base.month, base.day, hour, minute);

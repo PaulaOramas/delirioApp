@@ -566,53 +566,6 @@ class _ThemePreviewRow extends StatelessWidget {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 6),
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Ejemplo', style: TextStyle(color: onBg, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  color: chipBg,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: chipBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('Chip', style: TextStyle(color: onBg)),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: chipBg,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('UI', style: TextStyle(color: onBg)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(title,
-                  style: TextStyle(
-                    color: onBg.withOpacity(.8),
-                    fontSize: 12,
-                  )),
-            ],
-          ),
         ),
       );
     }
