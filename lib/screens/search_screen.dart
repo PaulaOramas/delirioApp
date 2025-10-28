@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 
+// MODELO + SERVICIO
+import 'package:delirio_app/models/product.dart';
+import 'package:delirio_app/services/product_service.dart';
+
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -12,12 +16,45 @@ class _SearchScreenState extends State<SearchScreen> {
   final _controller = TextEditingController();
   final _focus = FocusNode();
 
-  // Datos de demo (solo UI)
+  // UI secundaria
   final List<String> _categories = ['Ramos', 'Plantas', 'Regalos', 'Secos', 'Premium', 'Ofertas'];
   final List<String> _trending = ['Ramo primavera', 'Monstera', 'Rosas rojas', 'Suculentas', 'Girasoles'];
   final List<String> _recent = ['Ramo pastel', 'Orquídea blanca'];
 
+  // Datos reales
+  List<Product> _all = [];
+  List<Product> _filtered = [];
+  bool _loadingAll = true;
+  String? _error;
+
+  // Estado de búsqueda/filtro
   bool _showSuggestions = true;
+  String? _selectedCategory; // null = sin filtro por categoría
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    setState(() {
+      _loadingAll = true;
+      _error = null;
+    });
+    try {
+      final list = await ProductService.getAllProducts();
+      setState(() {
+        _all = list;
+        _loadingAll = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'No se pudieron cargar los productos: $e';
+        _loadingAll = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -26,6 +63,34 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
+  // ----------------- LÓGICA DE BÚSQUEDA/FILTRO -----------------
+
+  String _norm(String? s) => (s ?? '').toLowerCase().trim();
+
+  void _applyFilters() {
+    final text = _controller.text.trim();
+    final hasText = text.length >= 2;
+    final hasCategory = (_selectedCategory != null && _selectedCategory!.isNotEmpty);
+
+    List<Product> result = _all;
+
+    if (hasText) {
+      final q = _norm(text);
+      result = result.where((p) => _norm(p.nombre).contains(q)).toList();
+    } else if (hasCategory) {
+      final cat = _norm(_selectedCategory);
+      result = result.where((p) => _norm(p.categoria) == cat).toList();
+    } else {
+      result = [];
+    }
+
+    setState(() {
+      _filtered = result;
+      _showSuggestions = !(hasText || hasCategory);
+    });
+  }
+
+  // Buscar por nombre (Enter/botón/recientes/tendencias)
   void _submitSearch(String value) {
     final query = value.trim();
     if (query.isEmpty) {
@@ -34,26 +99,65 @@ class _SearchScreenState extends State<SearchScreen> {
       );
       return;
     }
-    // Solo UI: feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Buscar: "$query" (UI demo)')),
-    );
-    setState(() {
-      if (!_recent.contains(query)) {
-        _recent.insert(0, query);
-        if (_recent.length > 6) _recent.removeLast();
-      }
-      _showSuggestions = false;
-      _focus.unfocus();
-    });
+    // Si busco por texto, deselecciono categoría
+    _selectedCategory = null;
+
+    if (!_recent.contains(query)) {
+      _recent.insert(0, query);
+      if (_recent.length > 6) _recent.removeLast();
+    }
+    _focus.unfocus();
+    _applyFilters();
   }
 
+  // Cambiar texto (live mode a partir de 2 letras)
+  void _onTextChanged(String t) {
+    if (t.trim().isEmpty) {
+      // Si no hay texto y no hay categoría -> sugerencias
+      if (_selectedCategory == null) {
+        setState(() => _showSuggestions = true);
+      } else {
+        _applyFilters(); // hay categoría activa
+      }
+      return;
+    }
+    if (t.trim().length < 2) {
+      setState(() => _showSuggestions = true);
+      return;
+    }
+    // Busco por texto; ignoro categoría
+    _selectedCategory = null;
+    _applyFilters();
+  }
+
+  // Limpiar texto
   void _clearSearch() {
     _controller.clear();
+    // Si no hay categoría activa -> sugerencias
     setState(() {
-      _showSuggestions = true;
+      if (_selectedCategory == null) {
+        _showSuggestions = true;
+        _filtered = [];
+      } else {
+        // Mantener filtro de categoría
+        _applyFilters();
+      }
     });
     _focus.requestFocus();
+  }
+
+  // Click en chip categoría
+  void _toggleCategory(String c) {
+    setState(() {
+      // Al elegir categoría, limpiar texto y forzar filtro por categoría
+      if (_selectedCategory?.toLowerCase() == c.toLowerCase()) {
+        _selectedCategory = null; // deseleccionar
+      } else {
+        _selectedCategory = c;
+      }
+      _controller.clear();
+    });
+    _applyFilters();
   }
 
   void _openFilters() {
@@ -65,10 +169,10 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // ----------------- UI -----------------
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -83,69 +187,71 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Barra de búsqueda
-                _SearchBar(
-                  controller: _controller,
-                  focusNode: _focus,
-                  onSubmitted: _submitSearch,
-                  onChanged: (t) {
-                    setState(() {
-                      _showSuggestions = t.trim().isEmpty || t.trim().length < 2;
-                    });
-                  },
-                  onClear: _clearSearch,
-                ),
-                const SizedBox(height: 16),
+          child: _loadingAll
+              ? const _InitialLoading()
+              : _error != null
+                  ? _ErrorState(message: _error!, onRetry: _loadAll)
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SearchBar(
+                            controller: _controller,
+                            focusNode: _focus,
+                            onSubmitted: _submitSearch,
+                            onChanged: _onTextChanged,
+                            onClear: _clearSearch,
+                          ),
+                          const SizedBox(height: 16),
 
-                // Chips de categorías
-                _SectionTitle('Categorías'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _categories.map((c) {
-                    final selected = _controller.text.trim().toLowerCase() == c.toLowerCase();
-                    return FilterChip(
-                      label: Text(c),
-                      selected: selected,
-                      selectedColor: Theme.of(context).colorScheme.primaryContainer,
-                      onSelected: (_) {
-                        _controller.text = c;
-                        _submitSearch(c);
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
+                          _SectionTitle('Categorías'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _categories.map((c) {
+                              final selected = _selectedCategory?.toLowerCase() == c.toLowerCase();
+                              return FilterChip(
+                                label: Text(c),
+                                selected: selected,
+                                selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                                onSelected: (_) => _toggleCategory(c),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 16),
 
-                // Contenido dinámico: sugerencias / resultados placeholder
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _showSuggestions
-                      ? _Suggestions(
-                          trending: _trending,
-                          recent: _recent,
-                          onTapItem: (q) {
-                            _controller.text = q;
-                            _submitSearch(q);
-                          },
-                        )
-                      : _ResultsPlaceholder(
-                          query: _controller.text.trim(),
-                          onBackToSuggestions: () {
-                            setState(() => _showSuggestions = true);
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: _showSuggestions
+                                ? _Suggestions(
+                                    trending: _trending,
+                                    recent: _recent,
+                                    onTapItem: (q) {
+                                      _controller.text = q;
+                                      _submitSearch(q);
+                                    },
+                                  )
+                                : _ResultsList(
+                                    query: (_selectedCategory != null && _selectedCategory!.isNotEmpty)
+                                        ? _selectedCategory!
+                                        : _controller.text.trim(),
+                                    items: _filtered,
+                                    onBackToSuggestions: () {
+                                      setState(() {
+                                        _selectedCategory = null;
+                                        _controller.clear();
+                                        _showSuggestions = true;
+                                        _filtered = [];
+                                      });
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
         ),
       ),
     );
@@ -181,7 +287,7 @@ class _SearchBar extends StatelessWidget {
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: 'Busca ramos, plantas o regalos',
-          prefixIcon: Icon(Icons.search, color: kFucsia),
+          prefixIcon: const Icon(Icons.search, color: kFucsia),
           suffixIcon: controller.text.isEmpty
               ? IconButton(
                   tooltip: 'Filtros',
@@ -239,7 +345,6 @@ class _Suggestions extends StatelessWidget {
       key: const ValueKey('suggestions'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Recientes
         if (recent.isNotEmpty) ...[
           _SectionTitle('Recientes'),
           const SizedBox(height: 8),
@@ -267,8 +372,6 @@ class _Suggestions extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-
-        // Tendencias
         _SectionTitle('Tendencias'),
         const SizedBox(height: 8),
         Card(
@@ -304,12 +407,16 @@ class _Suggestions extends StatelessWidget {
   }
 }
 
-class _ResultsPlaceholder extends StatelessWidget {
+// =================== RESULTADOS ===================
+
+class _ResultsList extends StatelessWidget {
   final String query;
+  final List<Product> items;
   final VoidCallback onBackToSuggestions;
 
-  const _ResultsPlaceholder({
+  const _ResultsList({
     required this.query,
+    required this.items,
     required this.onBackToSuggestions,
   });
 
@@ -317,108 +424,177 @@ class _ResultsPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    if (items.isEmpty) {
+      return Column(
+        key: const ValueKey('results-empty'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionTitle('Resultados'),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerHighest,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  const Icon(Icons.search_off, size: 56),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Sin resultados para “$query”',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: onBackToSuggestions,
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Volver a sugerencias'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       key: const ValueKey('results'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionTitle('Resultados'),
+        _SectionTitle('Resultados (${items.length})'),
         const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              children: [
-                Icon(Icons.search, size: 56, color: kFucsia),
-                const SizedBox(height: 12),
-                Text(
-                  'Buscando “$query”…',
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Aquí aparecerán los resultados. Integra tu API cuando esté lista.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                FilledButton.tonalIcon(
-                  onPressed: onBackToSuggestions,
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Volver a sugerencias'),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Placeholder de tarjetas de producto (UI-only)
         GridView.builder(
           padding: const EdgeInsets.only(top: 8),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: 4,
+          itemCount: items.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisExtent: 200,
+            mainAxisExtent: 230,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemBuilder: (_, i) => _ProductCardSkeleton(index: i),
+          itemBuilder: (_, i) => _ProductCard(product: items[i]),
         ),
       ],
     );
   }
 }
 
-class _ProductCardSkeleton extends StatelessWidget {
-  final int index;
-  const _ProductCardSkeleton({required this.index});
+class _ProductCard extends StatelessWidget {
+  final Product product;
+  const _ProductCard({required this.product});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final img = (product.imagenes.isNotEmpty ? product.imagenes.first : '').trim();
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Seleccionaste: ${product.nombre}')),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Expanded(
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  color: theme.colorScheme.surfaceVariant.withOpacity(.5),
+                  child: img.isEmpty
+                      ? Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Icon(Icons.local_florist, size: 28),
+                        )
+                      : Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: theme.colorScheme.surfaceVariant,
+                            child: const Icon(Icons.local_florist, size: 28),
+                          ),
+                        ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: 12,
-                width: 110,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  color: theme.colorScheme.surfaceVariant,
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  product.nombre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-            ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '\$${product.precio.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: kFucsia),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InitialLoading extends StatelessWidget {
+  const _InitialLoading();
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, __) => Card(
+        elevation: 0,
+        color: theme.colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const SizedBox(height: 72),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
+            const SizedBox(height: 12),
+            Text('Ups…', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                height: 12,
-                width: 70,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(6),
-                  color: theme.colorScheme.surfaceVariant,
-                ),
-              ),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
             ),
           ],
         ),
