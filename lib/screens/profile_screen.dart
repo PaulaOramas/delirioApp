@@ -218,28 +218,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: const Text('Claro / Oscuro / Sistema'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      final result = await showDialog<ThemeMode>(
-                        context: context,
-                        builder: (context) => SimpleDialog(
-                          title: const Text('Selecciona el tema'),
-                          children: [
-                            SimpleDialogOption(
-                              onPressed: () => Navigator.pop(context, ThemeMode.system),
-                              child: const Text('Sistema'),
+                      final picked = await showThemeModePicker(context);
+                      if (picked != null) {
+                        themeController.setMode(picked); // provisto por tu app
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                picked == ThemeMode.system
+                                    ? 'Tema: Sistema'
+                                    : picked == ThemeMode.light
+                                        ? 'Tema: Claro'
+                                        : 'Tema: Oscuro',
+                              ),
                             ),
-                            SimpleDialogOption(
-                              onPressed: () => Navigator.pop(context, ThemeMode.light),
-                              child: const Text('Claro'),
-                            ),
-                            SimpleDialogOption(
-                              onPressed: () => Navigator.pop(context, ThemeMode.dark),
-                              child: const Text('Oscuro'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (result != null) {
-                        themeController.setMode(result); // provisto por tu app
+                          );
+                        }
                       }
                     },
                   ),
@@ -329,6 +323,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
         return Padding(
           padding: EdgeInsets.only(
@@ -384,16 +381,229 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await AuthService.instance.logout();
       // Cambiar a pestaña Inicio (dashboard) en lugar de redirigir al Login
       try {
-        // bottomNavIndex provisto por `lib/navigation.dart`
-        // si no está disponible, la app seguirá en la pantalla actual pero con sesión cerrada
         bottomNavIndex.value = 0;
       } catch (_) {}
 
       if (!context.mounted) return;
-      // Cerrar todas las rutas sobre la raíz para evitar pantallas abiertas encima
       Navigator.of(context).popUntil((route) => route.isFirst);
       setState(() {}); // forzar reconstrucción si estamos dentro de MainScaffold
     }
+  }
+}
+
+// ===== Picker de Tema (Bottom Sheet) =====
+
+Future<ThemeMode?> showThemeModePicker(BuildContext context) {
+  final theme = Theme.of(context);
+  // Determinar seleccionado actual
+  final current = themeController.mode ??
+      (theme.brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light);
+
+  return showModalBottomSheet<ThemeMode>(
+    context: context,
+    isScrollControlled: false,
+    showDragHandle: true,
+    backgroundColor: theme.colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Apariencia',
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+
+            // Vista previa compacta
+            const _ThemePreviewRow(),
+
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+
+            _ThemeOptionTile(
+              title: 'Sistema',
+              subtitle: 'Se ajusta al tema del dispositivo',
+              icon: Icons.phone_android,
+              selected: current == ThemeMode.system,
+              onTap: () => Navigator.pop(ctx, ThemeMode.system),
+            ),
+            const Divider(height: 1),
+
+            _ThemeOptionTile(
+              title: 'Claro',
+              subtitle: 'Fondo claro, textos oscuros',
+              icon: Icons.wb_sunny_outlined,
+              selected: current == ThemeMode.light,
+              onTap: () => Navigator.pop(ctx, ThemeMode.light),
+            ),
+            const Divider(height: 1),
+
+            _ThemeOptionTile(
+              title: 'Oscuro',
+              subtitle: 'Fondo oscuro, descanso visual',
+              icon: Icons.nightlight_round,
+              selected: current == ThemeMode.dark,
+              onTap: () => Navigator.pop(ctx, ThemeMode.dark),
+            ),
+
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _ThemeOptionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeOptionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tileColor = selected
+        ? theme.colorScheme.primary.withOpacity(0.08)
+        : theme.colorScheme.surface;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: tileColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      )),
+                ],
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: selected
+                  ? Icon(Icons.check_circle,
+                      key: const ValueKey('sel'),
+                      color: theme.colorScheme.primary)
+                  : const SizedBox.shrink(key: ValueKey('nosel')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemePreviewRow extends StatelessWidget {
+  const _ThemePreviewRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Widget _previewCard({
+      required String title,
+      required bool dark,
+    }) {
+      final bg = dark ? const Color(0xFF1E1E1E) : Colors.white;
+      final onBg = dark ? Colors.white : Colors.black87;
+      final chipBg = dark ? const Color(0xFF2C2C2C) : const Color(0xFFF3F3F3);
+
+      return Expanded(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ejemplo', style: TextStyle(color: onBg, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: chipBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('Chip', style: TextStyle(color: onBg)),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: chipBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('UI', style: TextStyle(color: onBg)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(title,
+                  style: TextStyle(
+                    color: onBg.withOpacity(.8),
+                    fontSize: 12,
+                  )),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        _previewCard(title: 'Claro', dark: false),
+        _previewCard(title: 'Oscuro', dark: true),
+      ],
+    );
   }
 }
 

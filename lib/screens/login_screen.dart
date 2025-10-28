@@ -27,18 +27,28 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _loading = false;
 
-  InputDecoration _inputDecoration({required String hint, required IconData icon}) => InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.9),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      );
+  InputDecoration _inputDecoration({required String hint, required IconData icon}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+        color: isDark ? Colors.white70 : Colors.grey[600],
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: isDark ? Colors.white70 : Colors.grey[700],
+      ),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white.withOpacity(0.9),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+    );
+  }
+  
   @override
   void dispose() {
     _userCtrl.dispose();

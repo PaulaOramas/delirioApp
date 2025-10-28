@@ -4,6 +4,7 @@ import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/order_confirmation_screen.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
+import 'package:delirio_app/services/product_service.dart'; // <- NUEVO
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -15,11 +16,66 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   final cart = CartService();
 
-  // Ajustes de cálculo (no cambian tu lógica de storage)
   static const double _ivaRate = 0.12; // 12% (EC)
-  static const double _envio = 3.99;   // envío fijo de ejemplo
+  static const double _envio = 3.99;   // ejemplo
 
   bool _saving = false;
+
+  // cache de stock por productoId
+  final Map<int, int> _stockById = {};
+  bool _loadingStock = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // cuando cambie el carrito, recargo stock
+    cart.items.addListener(_refreshStocks);
+    _refreshStocks();
+  }
+
+  @override
+  void dispose() {
+    cart.items.removeListener(_refreshStocks);
+    super.dispose();
+  }
+
+  Future<void> _refreshStocks() async {
+    final items = cart.items.value;
+    if (items.isEmpty) {
+      setState(() {
+        _stockById.clear();
+      });
+      return;
+    }
+
+    setState(() => _loadingStock = true);
+    try {
+      // cargo stock para ids únicos
+      final ids = items.map((e) => e.id).toSet().toList();
+      for (final id in ids) {
+        try {
+          final p = await ProductService.getById(id);
+          _stockById[id] = p.stock ?? 0; // ajusta si tu Product tiene "stock"
+        } catch (_) {
+          // si falla, deja stock 0 para ese producto (no dejar comprar)
+          _stockById[id] = 0;
+        }
+      }
+    } finally {
+      setState(() => _loadingStock = false);
+    }
+
+    // si alguna qty > stock, la bajo
+    bool changed = false;
+    for (final it in items) {
+      final max = _stockById[it.id] ?? 0;
+      if (it.qty > max) {
+        it.qty = max.clamp(0, 99);
+        changed = true;
+      }
+    }
+    if (changed) cart.items.notifyListeners();
+  }
 
   double _subtotal(List<CartItem> items) =>
       items.fold(0.0, (sum, it) => sum + it.precio * it.qty);
@@ -27,9 +83,17 @@ class _CartScreenState extends State<CartScreen> {
   double _total(List<CartItem> items) =>
       (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items) + _envio);
 
-  // Subir/bajar cantidades (con notifyListeners para refrescar otros listeners)
   void _incQty(CartItem it) {
-    setState(() => it.qty = (it.qty + 1).clamp(1, 99));
+    final max = _stockById[it.id] ?? 0;
+    if (max <= 0) {
+      _toast('Sin stock disponible');
+      return;
+    }
+    if (it.qty >= max) {
+      _toast('Solo quedan $max unidades');
+      return;
+    }
+    setState(() => it.qty = (it.qty + 1).clamp(1, max));
     cart.items.notifyListeners();
   }
 
@@ -41,7 +105,6 @@ class _CartScreenState extends State<CartScreen> {
   void _remove(CartItem it) => cart.removeItem(it.id);
   void _clearCart() => cart.clear();
 
-  // Si quieres forzar login antes de ir a confirmar, usa este helper
   Future<bool> _ensureLoggedIn() async {
     if (AuthService.instance.isLoggedIn()) return true;
     final goLogin = await showDialog<bool>(
@@ -64,23 +127,77 @@ class _CartScreenState extends State<CartScreen> {
     return AuthService.instance.isLoggedIn();
   }
 
-  void _goToConfirmation(List<CartItem> items) async {
+  // Valida que ninguna qty exceda stock. Si excede, la ajusta y notifica.
+  bool _enforceMaxStock(List<CartItem> items) {
+    bool adjusted = false;
+    final msgs = <String>[];
+
+    for (final it in items) {
+      final max = _stockById[it.id] ?? 0;
+      if (it.qty > max) {
+        it.qty = max.clamp(0, 99);
+        adjusted = true;
+        msgs.add('${it.nombre}: máx $max');
+      }
+    }
+    if (adjusted) {
+      cart.items.notifyListeners();
+      final text = 'Ajustamos por stock:\n• ' + msgs.join('\n• ');
+      _snack(text);
+    }
+    return !adjusted; // true si todo ok; false si hubo ajustes
+  }
+
+  Future<void> _goToConfirmation(List<CartItem> items) async {
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tu carrito está vacío')),
-      );
+      _snack('Tu carrito está vacío');
+      return;
+    }
+    if (_loadingStock) {
+      _snack('Cargando stock, intenta de nuevo…');
       return;
     }
 
-    // Si quieres requerir login ANTES de la confirmación, descomenta:
+    // fuerza cantidades contra stock
+    final okStock = _enforceMaxStock(items);
+    if (!okStock) return;
+
+    // Requiere login antes de confirmar
     final ok = await _ensureLoggedIn();
     if (!ok) return;
 
-    // Navega: la pantalla de confirmación leerá el snapshot del carrito local
+    // Si aquí quisieras DESCONTAR stock en la API antes de ir a confirmar,
+    // puedes hacerlo en este punto (transacción real sugerida en backend).
+    // Ejemplo optimista (usa SOLO una de las variantes del ProductService):
+    /*
+    setState(() => _saving = true);
+    try {
+      for (final it in items) {
+        final current = _stockById[it.id] ?? 0;
+        final newStock = (current - it.qty).clamp(0, 1 << 31);
+        await ProductService.updateStockOnly(it.id, newStock);
+        // o: await ProductService.updateProductStockFull(it.id, newStock);
+        _stockById[it.id] = newStock;
+      }
+    } catch (e) {
+      _snack('No se pudo reservar stock. Intenta más tarde.');
+      setState(() => _saving = false);
+      return;
+    } finally {
+      setState(() => _saving = false);
+    }
+    */
+
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
     );
   }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _toast(String msg) => _snack(msg);
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +244,8 @@ class _CartScreenState extends State<CartScreen> {
                 ? _EmptyState(onExplore: () => Navigator.pop(context))
                 : Column(
                     children: [
+                      if (_loadingStock)
+                        const LinearProgressIndicator(minHeight: 2),
                       Expanded(
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -134,8 +253,11 @@ class _CartScreenState extends State<CartScreen> {
                           separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final it = items[i];
+                            final max = _stockById[it.id] ?? 0;
+                            final reachedMax = it.qty >= max && max > 0;
+
                             return Dismissible(
-                              key: ValueKey('${it.id}-${i}'),
+                              key: ValueKey('${it.id}-$i'),
                               direction: _saving ? DismissDirection.none : DismissDirection.endToStart,
                               onDismissed: (_) => _remove(it),
                               background: Container(
@@ -149,6 +271,8 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: _CartTile(
                                 item: it,
+                                stock: max,                   // <- NUEVO
+                                reachedMax: reachedMax,       // <- NUEVO
                                 onDec: _saving ? null : () => _decQty(it),
                                 onInc: _saving ? null : () => _incQty(it),
                                 onRemove: _saving ? null : () => _remove(it),
@@ -162,8 +286,8 @@ class _CartScreenState extends State<CartScreen> {
                         iva: _iva(items),
                         envio: _envio,
                         total: _total(items),
-                        isLoading: _saving,
-                        onCheckout: _saving ? null : () => _goToConfirmation(items),
+                        isLoading: _saving || _loadingStock,
+                        onCheckout: (_saving || _loadingStock) ? null : () => _goToConfirmation(items),
                       ),
                     ],
                   );
@@ -176,12 +300,16 @@ class _CartScreenState extends State<CartScreen> {
 
 class _CartTile extends StatelessWidget {
   final CartItem item;
+  final int stock;            // <- NUEVO
+  final bool reachedMax;      // <- NUEVO
   final VoidCallback? onDec;
   final VoidCallback? onInc;
   final VoidCallback? onRemove;
 
   const _CartTile({
     required this.item,
+    required this.stock,
+    required this.reachedMax,
     required this.onDec,
     required this.onInc,
     required this.onRemove,
@@ -192,6 +320,7 @@ class _CartTile extends StatelessWidget {
     try {
       final theme = Theme.of(context);
       final img = (item.imagen ?? '').trim();
+      final noStock = stock <= 0;
 
       return Card(
         elevation: 0,
@@ -201,7 +330,7 @@ class _CartTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Imagen segura (placeholder si no hay URL)
+              // Imagen segura
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
@@ -242,6 +371,15 @@ class _CartTile extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    // Stock hint
+                    Text(
+                      noStock ? 'Sin stock' : 'Quedan $stock',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: noStock ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       '\$${item.precio.toStringAsFixed(2)}',
@@ -260,7 +398,14 @@ class _CartTile extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: Text('${item.qty}', style: theme.textTheme.titleMedium),
                         ),
-                        _QtyButton(icon: Icons.add, onTap: onInc),
+                        // Deshabilita el '+' si alcanzó stock o si no hay stock
+                        AbsorbPointer(
+                          absorbing: reachedMax || noStock,
+                          child: Opacity(
+                            opacity: (reachedMax || noStock) ? 0.4 : 1,
+                            child: _QtyButton(icon: Icons.add, onTap: onInc),
+                          ),
+                        ),
                         const Spacer(),
                         IconButton(
                           tooltip: 'Eliminar',
@@ -323,6 +468,36 @@ class _QtyButton extends StatelessWidget {
   }
 }
 
+// Widget que se muestra cuando el carrito está vacío
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onExplore;
+  const _EmptyState({required this.onExplore});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.shopping_cart_outlined, size: 64, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(height: 16),
+          Text('Tu carrito está vacío', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text('Explora productos y agrégalos al carrito.', style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 16),
+          FilledButton.tonal(
+            onPressed: onExplore,
+            child: const Text('Explorar productos'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Resumen / tarjeta con total y botón de confirmar
 class _SummaryCard extends StatelessWidget {
   final double subtotal;
   final double iva;
@@ -332,112 +507,66 @@ class _SummaryCard extends StatelessWidget {
   final VoidCallback? onCheckout;
 
   const _SummaryCard({
-    required this.subtotal,
-    required this.iva,
-    required this.envio,
-    required this.total,
-    required this.isLoading,
-    required this.onCheckout,
+    this.subtotal = 0.0,
+    this.iva = 0.0,
+    this.envio = 0.0,
+    this.total = 0.0,
+    this.isLoading = false,
+    this.onCheckout,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final disabled = onCheckout == null;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(.08),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Card(
-        elevation: 0,
-        color: theme.colorScheme.surfaceContainerHighest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          child: Column(
-            children: [
-              _row('Subtotal', subtotal),
-              const SizedBox(height: 6),
-              _row('IVA (12%)', iva),
-              const SizedBox(height: 6),
-              _row('Envío', envio),
-              const Divider(height: 22),
-              _row('Total', total, isBold: true, isFucsia: true),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: disabled ? theme.disabledColor : kFucsia,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: onCheckout,
-                  icon: isLoading
-                      ? const SizedBox(
-                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.lock_outline),
-                  label: Text(isLoading ? 'Procesando...' : 'Hacer pedido'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, double value, {bool isBold = false, bool isFucsia = false}) {
-    final style = TextStyle(
-      fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-      color: isFucsia ? kFucsia : null,
-    );
-    return Row(
-      children: [
-        Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500))),
-        Text('\$${value.toStringAsFixed(2)}', style: style),
-      ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onExplore;
-  const _EmptyState({required this.onExplore});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(12),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.shopping_bag_outlined, size: 72, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(height: 12),
-            Text('Tu carrito está vacío',
-                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(
-              'Explora nuestros ramos, plantas y regalos. ¡Hay algo para cada ocasión!',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
+            Row(
+              children: [
+                Expanded(child: Text('Subtotal', style: theme.textTheme.bodyMedium)),
+                Text('\$${subtotal.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
+              ],
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: onExplore,
-              icon: const Icon(Icons.explore_outlined),
-              label: const Text('Explorar productos'),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(child: Text('IVA', style: theme.textTheme.bodyMedium)),
+                Text('\$${iva.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(child: Text('Envío', style: theme.textTheme.bodyMedium)),
+                Text('\$${envio.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
+              ],
+            ),
+            const Divider(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Total',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text('\$${total.toStringAsFixed(2)}',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: (isLoading) ? null : onCheckout,
+                child: isLoading ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Confirmar pedido'),
+              ),
             ),
           ],
         ),
