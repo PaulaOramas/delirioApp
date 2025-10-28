@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
-import 'package:delirio_app/screens/dashboard_screen.dart';
-import 'package:delirio_app/screens/register_role_screen.dart';
-
+import 'package:delirio_app/main.dart';
+import 'package:delirio_app/screens/register_form_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// If [replaceWithMainOnSuccess] is true (default), a successful login will
+  /// navigate to the app shell (`MainScaffold`) and clear the back stack.
+  /// If false, the login screen will simply pop with `true` so the caller can
+  /// continue (useful when requiring login for a specific flow).
+  const LoginScreen({super.key, this.replaceWithMainOnSuccess = true});
+
+  final bool replaceWithMainOnSuccess;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -16,6 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _userFocus = FocusNode();
+  final _passFocus = FocusNode();
+
   bool _obscure = true;
   bool _loading = false;
 
@@ -35,27 +43,46 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _userCtrl.dispose();
     _passCtrl.dispose();
+    _userFocus.dispose();
+    _passFocus.dispose();
     super.dispose();
   }
 
   Future<void> _onLogin() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     setState(() => _loading = true);
 
-    final ok = await AuthService.login(_userCtrl.text.trim(), _passCtrl.text);
-    setState(() => _loading = false);
-
-    if (!mounted) return;
-
-    if (ok) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        (route) => false,
+    try {
+      final ok = await AuthService.instance.login(
+        _userCtrl.text.trim(),
+        _passCtrl.text,
       );
-    } else {
+
+      if (!mounted) return;
+
+      if (ok) {
+        // navegar al shell principal o retornar al caller según el flag
+        if (widget.replaceWithMainOnSuccess) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainScaffold()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Credenciales inválidas')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Credenciales inválidas')),
+        SnackBar(content: Text('No se pudo iniciar sesión: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -66,13 +93,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Fondo con degradado usando tu esquema de color
+          // Fondo con degradado
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary,
+                  Theme.of(context).colorScheme.surface,
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -88,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo y título
+                      // Logo
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -99,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'DeLirio',
+                        'Estatus',
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -107,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Tarjeta con campos
+                      // Card con formulario
                       Card(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 8,
@@ -120,19 +147,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 Text('Iniciar sesión', style: Theme.of(context).textTheme.titleLarge),
                                 const SizedBox(height: 12),
+
+                                // Usuario
                                 TextFormField(
                                   controller: _userCtrl,
-                                  //keyboardType: TextInputType.emailAddress,
+                                  focusNode: _userFocus,
+                                  textInputAction: TextInputAction.next,
+                                  onFieldSubmitted: (_) => _passFocus.requestFocus(),
                                   decoration: _inputDecoration(hint: 'Nombre de usuario', icon: Icons.person),
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) return 'Ingresa tu usuario';
-                                    return null;
-                                  },
+                                  validator: (v) =>
+                                      (v == null || v.trim().isEmpty) ? 'Ingresa tu usuario' : null,
                                 ),
                                 const SizedBox(height: 12),
+
+                                // Contraseña
                                 TextFormField(
                                   controller: _passCtrl,
+                                  focusNode: _passFocus,
                                   obscureText: _obscure,
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) => _onLogin(),
                                   decoration: _inputDecoration(hint: 'Contraseña', icon: Icons.lock).copyWith(
                                     suffixIcon: IconButton(
                                       icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
@@ -146,19 +180,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                     return null;
                                   },
                                 ),
+
                                 const SizedBox(height: 8),
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: TextButton(
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Función no implementada')),
-                                      );
-                                    },
+                                    onPressed: _loading
+                                        ? null
+                                        : () => ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Recuperar contraseña (próximamente)')),
+                                            ),
                                     child: const Text('¿Olvidaste tu contraseña?'),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
+
+                                // Botón ingresar
                                 SizedBox(
                                   height: 48,
                                   child: ElevatedButton(
@@ -176,17 +213,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
+
+                                // CTA crear cuenta
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Text('¿No tienes cuenta?'),
                                     TextButton(
-                                        onPressed: () {
-                                            Navigator.of(context).push(MaterialPageRoute(
-                                                builder: (_) => const RegisterRoleScreen(),
-                                            ));
-                                        },
-                                        child: const Text('Crear cuenta'),
+                                      onPressed: _loading
+                                          ? null
+                                          : () {
+                                              Navigator.of(context).push(MaterialPageRoute(
+                                                builder: (_) => const RegisterFormScreen(role: UserRole.usuario),
+                                              ));
+                                            },
+                                      child: const Text('Crear cuenta'),
                                     ),
                                   ],
                                 ),
