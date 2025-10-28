@@ -156,55 +156,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // ===== Banner =====
-          Container(
-            height: 160,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient:
-                  LinearGradient(colors: [kFucsia, Colors.pinkAccent.shade100]),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Flores para cada momento',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '¡Pide tu arreglo ya!',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  SizedBox(
-                    width: 96,
-                    height: 96,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      child: Icon(Icons.local_florist, size: 48, color: Colors.white),
-                    ),
-                  ),
-                ],
+Container(
+  height: 160,
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(16),
+    gradient: LinearGradient(
+      colors: [kFucsia, Colors.pinkAccent.shade100],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+  ),
+  child: Padding( // <-- sin const
+    padding: const EdgeInsets.all(16),
+    child: Row( // <-- sin const
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Text(
+                'Flores para cada momento',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+              SizedBox(height: 8),
+              Text(
+                '¡Pide tu arreglo ya!',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
           ),
+        ),
+        const SizedBox(width: 12),
+SizedBox(
+  width: 96,
+  height: 96,
+  child: DecoratedBox(
+    decoration: const BoxDecoration(
+      color: Colors.white24,
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+    ),
+    child: ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      child: Image.asset(
+        'assets/images/estatusLogoOff.png',
+        fit: BoxFit.cover, // o BoxFit.contain si quieres mantener proporción exacta
+      ),
+    ),
+  ),
+),
+
+      ],
+    ),
+  ),
+),
           const SizedBox(height: 16),
 
           // ===== Buscador =====

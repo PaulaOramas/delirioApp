@@ -647,8 +647,8 @@ class _ProfileHeader extends StatelessWidget {
             const SizedBox(width: 8),
             OutlinedButton.icon(
               onPressed: onEdit,
-              icon: const Icon(Icons.edit, size: 18),
-              label: const Text('Editar'),
+              icon: const Icon(Icons.visibility, size: 18),
+              label: const Text('Ver'),
             ),
           ],
         ),

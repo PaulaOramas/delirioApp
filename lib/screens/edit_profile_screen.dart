@@ -74,6 +74,8 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
   bool _obscure2 = true;
   int _passwordScore = 0;
 
+  bool _isEditing = false; // ⬅️ NUEVO: control de edición
+
   String _countryCode = '+593'; // visible, pero sin impacto “servidor”
   late UserProfileMock _profile;
 
@@ -244,9 +246,12 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
     );
   }
 
-  // ===== GUARDAR (mock) =====
+  // ===== GUARDAR (mock/API) =====
   Future<void> _save() async {
+    // Solo permitir guardar si estás en modo edición
+    if (!_isEditing) return;
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _saving = true);
 
     final updated = UserProfileMock(
@@ -279,16 +284,42 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
     if (!mounted) return;
     setState(() => _saving = false);
+
     if (ok) {
+      setState(() {
+        _isEditing = false;      // ⬅️ salir de edición al guardar
+        _showPasswordSection = false;
+        _passwordCtrl.clear();
+        _password2Ctrl.clear();
+        _passwordScore = 0;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cambios guardados ✅ (simulación)')),
+        const SnackBar(content: Text('Cambios guardados ✅')),
       );
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudieron guardar (simulación)')),
+        const SnackBar(content: Text('No se pudieron guardar')),
       );
     }
+  }
+
+  // ===== MODO EDICIÓN =====
+  void _toggleEditing() {
+    if (_saving || _loading) return;
+    setState(() {
+      _isEditing = !_isEditing;
+      if (!_isEditing) {
+        // Al salir de edición, resetea sección de password
+        _showPasswordSection = false;
+        _passwordCtrl.clear();
+        _password2Ctrl.clear();
+        _passwordScore = 0;
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_isEditing ? 'Modo edición activado' : 'Modo edición desactivado')),
+    );
   }
 
   String _iniciales(String n, String a) {
@@ -316,19 +347,12 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Editar perfil (demo)'),
-        actions: [
-          IconButton(
-            tooltip: 'Guardar',
-            onPressed: _saving || _loading ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-          ),
-        ],
+        leading: IconButton(
+          tooltip: _isEditing ? 'Cancelar edición' : 'Editar',
+          onPressed: _toggleEditing,
+          icon: Icon(_isEditing ? Icons.close : Icons.edit),
+        ),
+        title: Text(_isEditing ? 'Datos (edición)' : 'Datos'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -370,10 +394,14 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                         style: theme.textTheme.titleMedium?.copyWith(
                                           fontWeight: FontWeight.w600,
                                         )),
-                                    Text('Esta es una simulación sin API.',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: theme.hintColor,
-                                        )),
+                                    Text(
+                                      _isEditing
+                                          ? 'Estás editando tus datos'
+                                          : 'Esta es una simulación sin API.',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.hintColor,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -386,6 +414,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _nombreCtrl,
+                                  readOnly: !_isEditing, // ⬅️ editable solo en modo edición
                                   textInputAction: TextInputAction.next,
                                   textCapitalization: TextCapitalization.words,
                                   autofillHints: const [AutofillHints.givenName],
@@ -397,6 +426,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _apellidoCtrl,
+                                  readOnly: !_isEditing,
                                   textInputAction: TextInputAction.next,
                                   textCapitalization: TextCapitalization.words,
                                   autofillHints: const [AutofillHints.familyName],
@@ -410,8 +440,10 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           TextFormField(
                             controller: _cedulaCtrl,
+                            readOnly: true, // ⬅️ CÉDULA NO EDITABLE (si quieres, cambia a !_isEditing)
                             keyboardType: TextInputType.number,
                             inputFormatters: [
+                              // aunque sea solo lectura, mantenemos formato
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(10),
                             ],
@@ -424,6 +456,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           TextFormField(
                             controller: _correoCtrl,
+                            readOnly: !_isEditing,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             autofillHints: const [AutofillHints.email],
@@ -449,13 +482,16 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                     DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
                                     DropdownMenuItem(value: '+52', child: Text('🇲🇽 +52')),
                                   ],
-                                  onChanged: (v) => setState(() => _countryCode = v ?? '+593'),
+                                  onChanged: _isEditing
+                                      ? (v) => setState(() => _countryCode = v ?? '+593')
+                                      : null, // ⬅️ solo en edición
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: TextFormField(
                                   controller: _telefonoCtrl,
+                                  readOnly: !_isEditing,
                                   keyboardType: TextInputType.number,
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
@@ -477,6 +513,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           TextFormField(
                             controller: _usuarioCtrl,
+                            readOnly: true, // ⬅️ si deseas editable, cambia a !_isEditing
                             textInputAction: TextInputAction.done,
                             autofillHints: const [AutofillHints.username],
                             decoration: _dec(context, 'Usuario', Icons.person_outline,
@@ -490,8 +527,15 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           // Sección cambio de contraseña (opcional)
                           InkWell(
-                            onTap: () =>
-                                setState(() => _showPasswordSection = !_showPasswordSection),
+                            onTap: () {
+                              if (!_isEditing) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Activa el modo edición para cambiar la contraseña')),
+                                );
+                                return;
+                              }
+                              setState(() => _showPasswordSection = !_showPasswordSection);
+                            },
                             child: Row(
                               children: [
                                 Icon(_showPasswordSection
@@ -515,10 +559,10 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                 const SizedBox(height: 12),
                                 TextFormField(
                                   controller: _passwordCtrl,
+                                  readOnly: !_isEditing,
                                   obscureText: _obscure,
                                   textInputAction: TextInputAction.next,
-                                  decoration: _dec(context, 'Nueva contraseña', Icons.lock_outline)
-                                      .copyWith(
+                                  decoration: _dec(context, 'Nueva contraseña', Icons.lock_outline).copyWith(
                                     suffixIcon: IconButton(
                                       icon: Icon(_obscure
                                           ? Icons.visibility_off
@@ -547,6 +591,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                 const SizedBox(height: 12),
                                 TextFormField(
                                   controller: _password2Ctrl,
+                                  readOnly: !_isEditing,
                                   obscureText: _obscure2,
                                   textInputAction: TextInputAction.done,
                                   decoration: _dec(
@@ -580,7 +625,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                     borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
-                              onPressed: _saving ? null : _save,
+                              onPressed: (_saving || !_isEditing) ? null : _save, // ⬅️ solo en edición
                               icon: _saving
                                   ? const SizedBox(
                                       width: 18, height: 18,
