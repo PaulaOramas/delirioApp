@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
+import 'package:delirio_app/screens/register_form_screen.dart';
+
 
 // Añadir esta import para navegar al historial de pedidos
 import 'package:delirio_app/screens/order_history_screen.dart';
@@ -175,10 +177,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           onPressed: () {
-                            // TODO: navegar a RegisterScreen
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterFormScreen(role: UserRole.usuario),
+                              ),
+                            );
                           },
                         ),
                       ),
+
                     ],
                   ),
                 ),
