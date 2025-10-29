@@ -21,7 +21,6 @@ class OrderConfirmationScreen extends StatefulWidget {
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   // ====== Configuración de cálculo ======
   static const double _ivaRate = 0.12; // Ecuador
-  static const double _envio = 3.99;
 
   // Ventana y horario de retiro (ajusta a tu negocio)
   static const int _pickupWindowDays = 7; // permitir escoger hasta 7 días adelante
@@ -49,7 +48,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
 
   double get _subtotal => _items.fold(0.0, (s, it) => s + (it.precio * it.qty));
   double get _iva => _subtotal * _ivaRate;
-  double get _total => _subtotal + _iva + _envio;
+  double get _total => _subtotal + _iva;
   double get _montoAPagar => _pagoSeleccionado == 0 ? (_total * 0.5) : _total;
 
   @override
@@ -430,8 +429,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                       const SizedBox(height: 6),
                       _row('IVA (${(_ivaRate * 100).toStringAsFixed(0)}%)', _iva),
                       const SizedBox(height: 6),
-                      _row('Envío', _envio),
-                      const Divider(height: 22),
+                      //const Divider(height: 22),
                       _row('Total', _total, bold: true, fucsia: true),
                       const SizedBox(height: 12),
                       // Mostrar selección de retiro en el resumen

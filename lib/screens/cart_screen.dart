@@ -18,7 +18,6 @@ class _CartScreenState extends State<CartScreen> {
   final cart = CartService();
 
   static const double _ivaRate = 0.12; // 12% (EC)
-  static const double _envio = 3.99;   // ejemplo
 
   bool _saving = false;
 
@@ -82,7 +81,7 @@ class _CartScreenState extends State<CartScreen> {
       items.fold(0.0, (sum, it) => sum + it.precio * it.qty);
   double _iva(List<CartItem> items) => _subtotal(items) * _ivaRate;
   double _total(List<CartItem> items) =>
-      (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items) + _envio);
+      (items.isEmpty ? 0.0 : _subtotal(items) + _iva(items));
 
   void _incQty(CartItem it) {
     final max = _stockById[it.id] ?? 0;
@@ -284,7 +283,6 @@ class _CartScreenState extends State<CartScreen> {
                       _SummaryCard(
                         subtotal: _subtotal(items),
                         iva: _iva(items),
-                        envio: _envio,
                         total: _total(items),
                         isLoading: _saving || _loadingStock,
                         onCheckout: (_saving || _loadingStock) ? null : () => _goToConfirmation(items),
@@ -625,7 +623,6 @@ class _BenefitPill extends StatelessWidget {
 class _SummaryCard extends StatelessWidget {
   final double subtotal;
   final double iva;
-  final double envio;
   final double total;
   final bool isLoading;
   final VoidCallback? onCheckout;
@@ -633,7 +630,6 @@ class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     this.subtotal = 0.0,
     this.iva = 0.0,
-    this.envio = 0.0,
     this.total = 0.0,
     this.isLoading = false,
     this.onCheckout,
@@ -662,13 +658,6 @@ class _SummaryCard extends StatelessWidget {
               children: [
                 Expanded(child: Text('IVA', style: theme.textTheme.bodyMedium)),
                 Text('\$${iva.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(child: Text('Envío', style: theme.textTheme.bodyMedium)),
-                Text('\$${envio.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
               ],
             ),
             const Divider(height: 16),
