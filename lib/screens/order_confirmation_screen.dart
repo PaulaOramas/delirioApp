@@ -484,6 +484,13 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               ),
               const SizedBox(height: 12),
 
+              // ===== NUEVO: Datos de transferencia =====
+              const _SectionTitle('Datos de transferencia'),
+              const SizedBox(height: 8),
+              _AccountInfoCard(monto: _montoAPagar),
+              const SizedBox(height: 12),
+
+
               // Comprobante
               const _SectionTitle('Comprobante de pago'),
               const SizedBox(height: 8),
@@ -669,31 +676,29 @@ class _ItemTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
                   width: 72,
                   height: 72,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: (img.isEmpty)
-                        ? Container(
+                  child: (img.isEmpty)
+                      ? Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Icon(Icons.local_florist, size: 28),
+                        )
+                      : Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
                             color: theme.colorScheme.surfaceVariant,
                             child: const Icon(Icons.local_florist, size: 28),
-                          )
-                        : Image.network(
-                            img,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: theme.colorScheme.surfaceVariant,
-                              child: const Icon(Icons.local_florist, size: 28),
-                            ),
                           ),
-                  ),
+                        ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(width: 12), // ← antes estaba height: 12
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -710,6 +715,8 @@ class _ItemTile extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -726,6 +733,7 @@ class _ItemTile extends StatelessWidget {
     );
   }
 }
+
 
 class _EmptyItems extends StatelessWidget {
   const _EmptyItems();
@@ -750,3 +758,105 @@ class _EmptyItems extends StatelessWidget {
     );
   }
 }
+
+class _AccountInfoCard extends StatelessWidget {
+  final double monto;
+  const _AccountInfoCard({required this.monto});
+
+  static const _titular = 'Ana Rodiguez';
+  static const _banco   = 'Banco Pichincha';
+  static const _tipo    = 'Cuenta de ahorros';
+  static const _numero  = '2210785643';
+
+  Future<void> _copyAccount(BuildContext context) async {
+    await Clipboard.setData(const ClipboardData(text: _numero));
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Número de cuenta copiado')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: cs.surfaceVariant,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_outlined),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Datos para transferencia',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(_titular, style: theme.textTheme.bodyMedium),
+            Text(_banco,   style: theme.textTheme.bodyMedium),
+            Text(_tipo,    style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    'No. $_numero',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: kFucsia,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _copyAccount(context),
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: const Text('Copiar'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: kFucsia,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 22),
+            Row(
+              children: [
+                const Icon(Icons.payments_outlined, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Monto a transferir: \$${monto.toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: kFucsia,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

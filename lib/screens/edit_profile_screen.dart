@@ -349,14 +349,21 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: _isEditing ? 'Cancelar edición' : 'Editar',
-          onPressed: _toggleEditing,
-          icon: Icon(_isEditing ? Icons.close : Icons.edit),
-        ),
-        title: Text(_isEditing ? 'Datos (edición)' : 'Datos'),
-      ),
+appBar: AppBar(
+  leading: IconButton(
+    tooltip: 'Volver',
+    onPressed: () => Navigator.of(context).maybePop(),
+    icon: const Icon(Icons.arrow_back),
+  ),
+  title: Text(_isEditing ? 'Datos (edición)' : 'Datos'),
+  actions: [
+    IconButton(
+      tooltip: _isEditing ? 'Cancelar edición' : 'Editar',
+      onPressed: _toggleEditing,
+      icon: Icon(_isEditing ? Icons.close : Icons.edit), // lápiz arriba derecha
+    ),
+  ],
+),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
