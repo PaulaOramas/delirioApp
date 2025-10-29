@@ -44,7 +44,7 @@ class FakeProfileRepository {
   }
 }
 
-/// ====== PANTALLA EDITAR PERFIL (Mock) ======
+/// ====== PANTALLA EDITAR PERFIL (Mock con API) ======
 class EditProfileMockScreen extends StatefulWidget {
   const EditProfileMockScreen({super.key});
 
@@ -74,7 +74,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
   bool _obscure2 = true;
   int _passwordScore = 0;
 
-  bool _isEditing = false; // ⬅️ NUEVO: control de edición
+  bool _isEditing = false; // ⬅️ control de edición
 
   String _countryCode = '+593'; // visible, pero sin impacto “servidor”
   late UserProfileMock _profile;
@@ -265,17 +265,20 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
     bool ok = false;
     if (_userId != null) {
-      final payload = {
-        'Nombre': updated.nombre,
-        'Apellido': updated.apellido,
-        'Cedula': updated.cedula,
-        'Correo': updated.correo,
-        'Telefono': updated.telefono,
-        'Usuario': updated.usuario,
-        if (_showPasswordSection) 'Password': _passwordCtrl.text,
-      };
-      ok = await ClienteApi.updatePerfil(_userId!, payload);
-    } else {
+  final payload = {
+    'Nombre': updated.nombre,
+    'Apellido': updated.apellido,
+    'Cedula': updated.cedula,
+    'Correo': updated.correo,
+    'Telefono': updated.telefono,
+    'Usuario': updated.usuario,
+    // ✅ solo incluir si se cambió
+    if (_showPasswordSection && _passwordCtrl.text.isNotEmpty)
+      'Password': _passwordCtrl.text,
+  };
+  ok = await ClienteApi.updatePerfil(_userId!, payload);
+}else {
+      // Mock
       ok = await _repo.updatePerfil(
         updated,
         newPassword: _showPasswordSection ? _passwordCtrl.text : null,
@@ -287,7 +290,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
     if (ok) {
       setState(() {
-        _isEditing = false;      // ⬅️ salir de edición al guardar
+        _isEditing = false;      // salir de edición al guardar
         _showPasswordSection = false;
         _passwordCtrl.clear();
         _password2Ctrl.clear();
@@ -414,7 +417,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _nombreCtrl,
-                                  readOnly: !_isEditing, // ⬅️ editable solo en modo edición
+                                  readOnly: !_isEditing, // editable solo en modo edición
                                   textInputAction: TextInputAction.next,
                                   textCapitalization: TextCapitalization.words,
                                   autofillHints: const [AutofillHints.givenName],
@@ -440,10 +443,9 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           TextFormField(
                             controller: _cedulaCtrl,
-                            readOnly: true, // ⬅️ CÉDULA NO EDITABLE (si quieres, cambia a !_isEditing)
+                            readOnly: true, // CÉDULA NO EDITABLE
                             keyboardType: TextInputType.number,
                             inputFormatters: [
-                              // aunque sea solo lectura, mantenemos formato
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(10),
                             ],
@@ -484,7 +486,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                   ],
                                   onChanged: _isEditing
                                       ? (v) => setState(() => _countryCode = v ?? '+593')
-                                      : null, // ⬅️ solo en edición
+                                      : null,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -513,7 +515,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
 
                           TextFormField(
                             controller: _usuarioCtrl,
-                            readOnly: true, // ⬅️ si deseas editable, cambia a !_isEditing
+                            readOnly: true, // si deseas editable, cambia a !_isEditing
                             textInputAction: TextInputAction.done,
                             autofillHints: const [AutofillHints.username],
                             decoration: _dec(context, 'Usuario', Icons.person_outline,
@@ -596,13 +598,12 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                   textInputAction: TextInputAction.done,
                                   decoration: _dec(
                                           context, 'Confirmar nueva contraseña', Icons.lock_reset)
-                                      .copyWith(
+                                  .copyWith(
                                     suffixIcon: IconButton(
-                                      icon: Icon(_obscure2
-                                          ? Icons.visibility_off
-                                          : Icons.visibility),
-                                      onPressed: () =>
-                                          setState(() => _obscure2 = !_obscure2),
+                                      icon: Icon(
+                                        _obscure2 ? Icons.visibility_off : Icons.visibility,
+                                      ),
+                                      onPressed: () => setState(() => _obscure2 = !_obscure2),
                                     ),
                                   ),
                                   validator: _validatePassword2,
@@ -625,7 +626,7 @@ class _EditProfileMockScreenState extends State<EditProfileMockScreen> {
                                     borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
-                              onPressed: (_saving || !_isEditing) ? null : _save, // ⬅️ solo en edición
+                              onPressed: (_saving || !_isEditing) ? null : _save, // solo en edición
                               icon: _saving
                                   ? const SizedBox(
                                       width: 18, height: 18,

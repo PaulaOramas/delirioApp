@@ -170,7 +170,7 @@ class _CartScreenState extends State<CartScreen> {
     // Si aquí quisieras DESCONTAR stock en la API antes de ir a confirmar,
     // puedes hacerlo en este punto (transacción real sugerida en backend).
     // Ejemplo optimista (usa SOLO una de las variantes del ProductService):
-    /*
+    
     setState(() => _saving = true);
     try {
       for (final it in items) {
@@ -187,7 +187,6 @@ class _CartScreenState extends State<CartScreen> {
     } finally {
       setState(() => _saving = false);
     }
-    */
 
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
