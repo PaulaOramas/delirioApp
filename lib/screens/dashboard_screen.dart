@@ -138,20 +138,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Estatus')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const CartScreen()));
-        },
-        icon: const Icon(Icons.shopping_cart),
-        label: ValueListenableBuilder<List<CartItem>>(
-          valueListenable: CartService().items,
-          builder: (context, items, _) {
-            final total = items.fold<int>(0, (s, it) => s + it.qty);
-            return Text('Carrito ($total)');
-          },
-        ),
-      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

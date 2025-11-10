@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:delirio_app/screens/dashboard_screen.dart';
 import 'package:delirio_app/screens/search_screen.dart';
 import 'package:delirio_app/screens/cart_screen.dart';
+import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/screens/profile_screen.dart';
 import 'package:delirio_app/theme.dart';
 
@@ -52,7 +53,14 @@ class _CustomNavBarState extends State<CustomNavBar> {
               children: [
                 _buildNavItem(Icons.home, "Inicio", 0, theme),
                 _buildSearchButton(theme),
-                _buildNavItem(Icons.shopping_cart, "Carrito", 2, theme),
+                // Cart item with badge (listening to CartService)
+                ValueListenableBuilder<List<CartItem>>(
+                  valueListenable: CartService().items,
+                  builder: (context, items, _) {
+                    final total = items.fold<int>(0, (s, it) => s + it.qty);
+                    return _buildNavItemWithBadge(Icons.shopping_cart, 'Carrito', 2, theme, total);
+                  },
+                ),
                 _buildNavItem(Icons.person, "Perfil", 3, theme),
               ],
             ),
@@ -121,6 +129,46 @@ class _CustomNavBarState extends State<CustomNavBar> {
                 ),
         ),
       ),
+    );
+  }
+
+  Widget _buildNavItemWithBadge(IconData icon, String label, int index, ThemeData theme, int badgeCount) {
+    final base = _buildNavItem(icon, label, index, theme);
+    if (badgeCount <= 0) return base;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        base,
+        Positioned(
+          top: -4,
+          right: -4,
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.error,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.onSurface.withOpacity(0.12),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                badgeCount > 99 ? '99+' : badgeCount.toString(),
+                style: TextStyle(
+                  color: theme.colorScheme.onError,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
