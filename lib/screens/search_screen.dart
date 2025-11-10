@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
+import 'package:delirio_app/screens/product_screen.dart';
+
 
 // MODELO + SERVICIO
 import 'package:delirio_app/models/product.dart';
@@ -499,11 +501,14 @@ class _ProductCard extends StatelessWidget {
       color: theme.colorScheme.surfaceContainerHighest,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Seleccionaste: ${product.nombre}')),
-          );
-        },
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductScreen(productId: product.id), // <-- usa el ID
+              ),
+            );
+          },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(

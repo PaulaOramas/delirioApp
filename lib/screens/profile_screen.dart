@@ -250,14 +250,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                     },
                   ),
-                  ListTile(
+                  /*ListTile(
                     leading: const Icon(Icons.lock_outline),
                     title: const Text('Privacidad y seguridad'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       // TODO
                     },
-                  ),
+                  ),*/
                 ],
               ),
 
