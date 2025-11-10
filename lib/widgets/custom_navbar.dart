@@ -7,7 +7,8 @@ import 'package:delirio_app/screens/profile_screen.dart';
 import 'package:delirio_app/theme.dart';
 
 class CustomNavBar extends StatefulWidget {
-  const CustomNavBar({super.key});
+  final Widget? child;
+  const CustomNavBar({super.key, this.child});
 
   @override
   State<CustomNavBar> createState() => _CustomNavBarState();
@@ -27,7 +28,7 @@ class _CustomNavBarState extends State<CustomNavBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: widget.child ?? _screens[_currentIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
         child: Material(

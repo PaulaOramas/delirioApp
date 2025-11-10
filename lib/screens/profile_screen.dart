@@ -234,19 +234,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final picked = await showThemeModePicker(context);
                       if (picked != null) {
                         themeController.setMode(picked);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                picked == ThemeMode.system
-                                    ? 'Tema: Sistema'
-                                    : picked == ThemeMode.light
-                                        ? 'Tema: Claro'
-                                        : 'Tema: Oscuro',
-                              ),
-                            ),
-                          );
-                        }
+                        // if (mounted) {
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //     SnackBar(
+                        //       content: Text(
+                        //         picked == ThemeMode.system
+                        //             ? 'Tema: Sistema'
+                        //             : picked == ThemeMode.light
+                        //                 ? 'Tema: Claro'
+                        //                 : 'Tema: Oscuro',
+                        //       ),
+                        //     ),
+                        //   );
+                        // }
                       }
                     },
                   ),
@@ -259,13 +259,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final picked = await showColorPalettePicker(context);
                       if (picked != null) {
                         themeController.setPalette(picked);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Paleta cambiada a: ${themeController.paletteDisplayName}'),
-                            ),
-                          );
-                        }
+                        // if (mounted) {
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //     SnackBar(
+                        //       content: Text('Paleta cambiada a: ${themeController.paletteDisplayName}'),
+                        //     ),
+                        //   );
+                        // }
                       }
                     },
                   ),
