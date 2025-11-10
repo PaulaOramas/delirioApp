@@ -30,8 +30,8 @@ class DeLirioApp extends StatelessWidget {
         return MaterialApp(
           title: 'DeLirio',
           debugShowCheckedModeBanner: false,
-          theme: buildDeLirioTheme(),
-          darkTheme: buildDeLirioDarkTheme(),
+          theme: themeController.lightTheme,
+          darkTheme: themeController.darkTheme,
           themeMode: themeController.mode,
           // ✅ ahora el menú principal es el widget CustomNavBar
           home: const CustomNavBar(),
