@@ -32,8 +32,8 @@ class DeLirioApp extends StatelessWidget {
         return MaterialApp(
           title: 'DeLirio',
           debugShowCheckedModeBanner: false,
-          theme: buildDeLirioTheme(),
-          darkTheme: buildDeLirioDarkTheme(),
+          theme: themeController.lightTheme,
+          darkTheme: themeController.darkTheme,
           themeMode: themeController.mode,
           // Abrir directamente el scaffold principal (que inicia en Dashboard)
           home: const MainScaffold(),

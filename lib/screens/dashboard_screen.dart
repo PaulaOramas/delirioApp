@@ -161,7 +161,10 @@ Container(
   decoration: BoxDecoration(
     borderRadius: BorderRadius.circular(16),
     gradient: LinearGradient(
-      colors: [kFucsia, Colors.pinkAccent.shade100],
+      colors: [
+        Theme.of(context).colorScheme.primary, 
+        Theme.of(context).colorScheme.primary.withOpacity(0.7)
+      ],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -259,7 +262,7 @@ SizedBox(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(c['icon'] as IconData, size: 28, color: kFucsia),
+                        Icon(c['icon'] as IconData, size: 28, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(height: 8),
                         Text(
                           c['name'] as String,
@@ -365,7 +368,7 @@ SizedBox(
                                     children: [
                                       Text(
                                         '\$${p.precio.toStringAsFixed(2)}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: kFucsia),
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
                                       ),
                                       Text(
                                         estadoTexto,

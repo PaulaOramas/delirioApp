@@ -1,112 +1,131 @@
 import 'package:flutter/material.dart';
 
+// ===== PALETA ROSA (Original) =====
 const kRosaPalo   = Color(0xFFF7C7D9);
 const kFucsia     = Color(0xFFE35A83);
 const kVerdeHoja  = Color(0xFF8CBF88);
 const kCrema      = Color(0xFFFFF6F2);
 const kGrisCarbon = Color(0xFF2E2E2E);
 
+// ===== PALETA VERDE =====
+const kVerdeClaro    = Color(0xFFC8E6C9);
+const kVerdePrimario = Color(0xFF4CAF50);
+const kVerdeSecund   = Color(0xFF81C784);
+const kVerdeFondo    = Color(0xFFF1F8E9);
+
+// ===== PALETA AZUL =====
+const kAzulClaro    = Color(0xFFBBDEFB);
+const kAzulPrimario = Color(0xFF2196F3);
+const kAzulSecund   = Color(0xFF64B5F6);
+const kAzulFondo    = Color(0xFFE3F2FD);
+
+// ===== ENUM PARA PALETAS =====
+enum ColorPalette { rosa, verde, azul }
+
+// ===== CONFIGURACIÓN DE COLORES POR PALETA =====
+Map<String, Color> _getColorsForPalette(ColorPalette palette) {
+  switch (palette) {
+    case ColorPalette.rosa:
+      return {
+        'primary': kFucsia,
+        'secondary': kVerdeHoja,
+        'surface': kCrema,
+        'background': kCrema,
+        'accent': kRosaPalo,
+      };
+    case ColorPalette.verde:
+      return {
+        'primary': kVerdePrimario,
+        'secondary': kVerdeSecund,
+        'surface': Colors.white,
+        'background': kVerdeFondo,
+        'accent': kVerdeClaro,
+      };
+    case ColorPalette.azul:
+      return {
+        'primary': kAzulPrimario,
+        'secondary': kAzulSecund,
+        'surface': Colors.white,
+        'background': kAzulFondo,
+        'accent': kAzulClaro,
+      };
+  }
+}
+
 // ===== LIGHT THEME =====
-ThemeData buildDeLirioTheme() {
+ThemeData buildDeLirioTheme({ColorPalette palette = ColorPalette.rosa}) {
+  final colors = _getColorsForPalette(palette);
+  
   final scheme = ColorScheme.fromSeed(
-    seedColor: kFucsia,
-    primary: kFucsia,
+    seedColor: colors['primary']!,
+    primary: colors['primary']!,
     onPrimary: Colors.white,
-    secondary: kVerdeHoja,
+    secondary: colors['secondary']!,
     onSecondary: Colors.white,
-    surface: kCrema,
+    surface: colors['surface']!,
     onSurface: kGrisCarbon,
-    background: kCrema,
+    background: colors['background']!,
     onBackground: kGrisCarbon,
     brightness: Brightness.light,
   );
 
-  return ThemeData(
-    useMaterial3: true,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: kCrema,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: kFucsia,
-      foregroundColor: Colors.white,
-      centerTitle: true,
-      elevation: 0,
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.transparent),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: kFucsia, width: 1.2),
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: kFucsia,
-        foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-    ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: kFucsia,
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-    ),
-    snackBarTheme: const SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
+  return _buildThemeData(scheme, colors, false);
 }
 
 // ===== DARK THEME =====
-ThemeData buildDeLirioDarkTheme() {
+ThemeData buildDeLirioDarkTheme({ColorPalette palette = ColorPalette.rosa}) {
+  final colors = _getColorsForPalette(palette);
+  
   final darkScheme = ColorScheme.fromSeed(
-    seedColor: kFucsia,
+    seedColor: colors['primary']!,
     brightness: Brightness.dark,
-    // Ajustes clave para tu marca
-    primary: kFucsia,
+    primary: colors['primary']!,
     onPrimary: Colors.white,
-    secondary: kVerdeHoja,
-    onSecondary: Colors.black,
-    surface: const Color(0xFF1D1D1D),   // superficie/cards
-    onSurface: Colors.white,            // texto sobre superficie
+    secondary: colors['secondary']!,
+    onSecondary: Colors.white,
+    surface: const Color(0xFF1D1D1D),
+    onSurface: Colors.white,
     background: const Color(0xFF121212),
     onBackground: Colors.white,
   );
 
+  return _buildThemeData(darkScheme, colors, true);
+}
+
+// ===== FUNCIÓN HELPER PARA CONSTRUIR TEMAS =====
+ThemeData _buildThemeData(ColorScheme scheme, Map<String, Color> colors, bool isDark) {
   return ThemeData(
     useMaterial3: true,
-    colorScheme: darkScheme,
-    scaffoldBackgroundColor: darkScheme.background,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: scheme.background,
     appBarTheme: AppBarTheme(
-      backgroundColor: kGrisCarbon,
+      backgroundColor: isDark ? kGrisCarbon : colors['primary']!,
       foregroundColor: Colors.white,
       centerTitle: true,
       elevation: 0,
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      // en oscuro evitamos blanco puro; usamos una capa sobre surface
-      fillColor: darkScheme.surface.withOpacity(0.9),
+      fillColor: isDark 
+          ? scheme.surface.withOpacity(0.9)
+          : Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+        borderSide: BorderSide(
+          color: isDark 
+              ? Colors.white.withOpacity(0.08)
+              : Colors.transparent,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: kFucsia, width: 1.2),
+        borderSide: BorderSide(color: colors['primary']!, width: 1.2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: kFucsia,
+        backgroundColor: colors['primary']!,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -114,24 +133,37 @@ ThemeData buildDeLirioDarkTheme() {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: kFucsia,
+        foregroundColor: colors['primary']!,
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: Colors.white,        // contraste alto en dark
-      contentTextStyle: const TextStyle(color: Colors.black),
+      backgroundColor: isDark ? Colors.white : colors['surface']!,
+      contentTextStyle: TextStyle(
+        color: isDark ? Colors.black : kGrisCarbon,
+      ),
     ),
-    iconTheme: const IconThemeData(color: Colors.white),
-    dividerColor: Colors.white.withOpacity(0.08),
+    iconTheme: IconThemeData(
+      color: isDark ? Colors.white : kGrisCarbon,
+    ),
+    dividerColor: isDark 
+        ? Colors.white.withOpacity(0.08)
+        : kGrisCarbon.withOpacity(0.12),
   );
 }
 
-// ===== Control simple de tema (opcional, sin paquetes) =====
+// ===== Control de tema mejorado =====
 class ThemeController extends ChangeNotifier {
   ThemeMode _mode = ThemeMode.system;
+  ColorPalette _palette = ColorPalette.rosa;
+
   ThemeMode get mode => _mode;
+  ColorPalette get palette => _palette;
+
+  // Getters para obtener los temas actuales
+  ThemeData get lightTheme => buildDeLirioTheme(palette: _palette);
+  ThemeData get darkTheme => buildDeLirioDarkTheme(palette: _palette);
 
   void setMode(ThemeMode m) {
     if (m == _mode) return;
@@ -139,12 +171,28 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPalette(ColorPalette p) {
+    if (p == _palette) return;
+    _palette = p;
+    notifyListeners();
+  }
+
   void toggleLightDark() {
     _mode = _mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     notifyListeners();
   }
+
+  String get paletteDisplayName {
+    switch (_palette) {
+      case ColorPalette.rosa:
+        return 'Rosa';
+      case ColorPalette.verde:
+        return 'Verde';
+      case ColorPalette.azul:
+        return 'Azul';
+    }
+  }
 }
 
-// Instancia global simple para controlar el tema desde cualquier pantalla.
-// Puedes reemplazar esto por Provider o Riverpod si prefieres.
+// Instancia global para controlar el tema desde cualquier pantalla.
 final themeController = ThemeController();

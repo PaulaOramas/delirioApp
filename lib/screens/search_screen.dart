@@ -289,7 +289,7 @@ class _SearchBar extends StatelessWidget {
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: 'Busca ramos, plantas o regalos',
-          prefixIcon: const Icon(Icons.search, color: kFucsia),
+          prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
           suffixIcon: controller.text.isEmpty
               ? IconButton(
                   tooltip: 'Filtros',
@@ -546,7 +546,7 @@ class _ProductCard extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '\$${product.precio.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: kFucsia),
+                  style: TextStyle(fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary),
                 ),
               ),
             ],

@@ -228,12 +228,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ListTile(
                     leading: const Icon(Icons.palette_outlined),
                     title: const Text('Tema'),
-                    subtitle: const Text('Claro / Oscuro / Sistema'),
+                    subtitle: Text('${_getThemeModeText()} • ${themeController.paletteDisplayName}'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
                       final picked = await showThemeModePicker(context);
                       if (picked != null) {
-                        themeController.setMode(picked); // provisto por tu app
+                        themeController.setMode(picked);
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -244,6 +244,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         ? 'Tema: Claro'
                                         : 'Tema: Oscuro',
                               ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.color_lens_outlined),
+                    title: const Text('Paleta de colores'),
+                    subtitle: Text(themeController.paletteDisplayName),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      final picked = await showColorPalettePicker(context);
+                      if (picked != null) {
+                        themeController.setPalette(picked);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Paleta cambiada a: ${themeController.paletteDisplayName}'),
                             ),
                           );
                         }
@@ -402,6 +421,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {}); // forzar reconstrucción si estamos dentro de MainScaffold
     }
   }
+
+  String _getThemeModeText() {
+    switch (themeController.mode) {
+      case ThemeMode.system:
+        return 'Sistema';
+      case ThemeMode.light:
+        return 'Claro';
+      case ThemeMode.dark:
+        return 'Oscuro';
+    }
+  }
 }
 
 // ===== Picker de Tema (Bottom Sheet) =====
@@ -467,6 +497,78 @@ Future<ThemeMode?> showThemeModePicker(BuildContext context) {
                 icon: Icons.nightlight_round,
                 selected: current == ThemeMode.dark,
                 onTap: () => Navigator.pop(ctx, ThemeMode.dark),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+// ===== Picker de Paleta de Colores (Bottom Sheet) =====
+
+Future<ColorPalette?> showColorPalettePicker(BuildContext context) {
+  final theme = Theme.of(context);
+  final current = themeController.palette;
+
+  return showModalBottomSheet<ColorPalette>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: theme.colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) {
+      final mq = MediaQuery.of(ctx);
+      final sheetMaxHeight = mq.size.height * 0.5;
+
+      return SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, mq.viewPadding.bottom + 16),
+            children: [
+              Center(
+                child: Text(
+                  'Paleta de colores',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              _ColorPaletteOption(
+                title: 'Rosa',
+                subtitle: 'Paleta original DeLirio',
+                primaryColor: kFucsia,
+                secondaryColor: kVerdeHoja,
+                accentColor: kRosaPalo,
+                selected: current == ColorPalette.rosa,
+                onTap: () => Navigator.pop(ctx, ColorPalette.rosa),
+              ),
+              const SizedBox(height: 12),
+
+              _ColorPaletteOption(
+                title: 'Verde',
+                subtitle: 'Paleta natural y fresca',
+                primaryColor: kVerdePrimario,
+                secondaryColor: kVerdeSecund,
+                accentColor: kVerdeClaro,
+                selected: current == ColorPalette.verde,
+                onTap: () => Navigator.pop(ctx, ColorPalette.verde),
+              ),
+              const SizedBox(height: 12),
+
+              _ColorPaletteOption(
+                title: 'Azul',
+                subtitle: 'Paleta profesional y serena',
+                primaryColor: kAzulPrimario,
+                secondaryColor: kAzulSecund,
+                accentColor: kAzulClaro,
+                selected: current == ColorPalette.azul,
+                onTap: () => Navigator.pop(ctx, ColorPalette.azul),
               ),
             ],
           ),
@@ -582,6 +684,99 @@ class _ThemePreviewRow extends StatelessWidget {
         _previewCard(title: 'Claro', dark: false),
         _previewCard(title: 'Oscuro', dark: true),
       ],
+    );
+  }
+}
+
+class _ColorPaletteOption extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final Color accentColor;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ColorPaletteOption({
+    required this.title,
+    required this.subtitle,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.accentColor,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? primaryColor
+                : theme.colorScheme.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+          color: selected
+              ? primaryColor.withOpacity(0.05)
+              : theme.colorScheme.surface,
+        ),
+        child: Row(
+          children: [
+            // Muestra de colores
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  colors: [primaryColor, secondaryColor, accentColor],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            
+            // Información
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: selected ? primaryColor : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Indicador de selección
+            if (selected)
+              Icon(
+                Icons.check_circle,
+                color: primaryColor,
+                size: 24,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
