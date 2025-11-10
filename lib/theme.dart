@@ -7,11 +7,17 @@ const kVerdeHoja  = Color(0xFF8CBF88);
 const kCrema      = Color(0xFFFFF6F2);
 const kGrisCarbon = Color(0xFF2E2E2E);
 
-// ===== PALETA VERDE =====
-const kVerdeClaro    = Color(0xFFC8E6C9);
-const kVerdePrimario = Color(0xFF4CAF50);
-const kVerdeSecund   = Color(0xFF81C784);
-const kVerdeFondo    = Color(0xFFF1F8E9);
+// ===== PALETA LAVANDA =====
+const kLavandaClaro    = Color(0xFFE1BEE7);
+const kLavandaPrimario = Color(0xFF9C27B0);
+const kLavandaSecund   = Color(0xFFBA68C8);
+const kLavandaFondo    = Color(0xFFF3E5F5);
+
+// ===== PALETA DURAZNO =====
+const kDuraznoClaro    = Color(0xFFFFE0B2);
+const kDuraznoPrimario = Color(0xFFFF9800);
+const kDuraznoSecund   = Color(0xFFFFB74D);
+const kDuraznoFondo    = Color(0xFFFFF8E1);
 
 // ===== PALETA AZUL =====
 const kAzulClaro    = Color(0xFFBBDEFB);
@@ -20,7 +26,7 @@ const kAzulSecund   = Color(0xFF64B5F6);
 const kAzulFondo    = Color(0xFFE3F2FD);
 
 // ===== ENUM PARA PALETAS =====
-enum ColorPalette { rosa, verde, azul }
+enum ColorPalette { rosa, lavanda, durazno, azul }
 
 // ===== CONFIGURACIÓN DE COLORES POR PALETA =====
 Map<String, Color> _getColorsForPalette(ColorPalette palette) {
@@ -33,13 +39,21 @@ Map<String, Color> _getColorsForPalette(ColorPalette palette) {
         'background': kCrema,
         'accent': kRosaPalo,
       };
-    case ColorPalette.verde:
+    case ColorPalette.lavanda:
       return {
-        'primary': kVerdePrimario,
-        'secondary': kVerdeSecund,
+        'primary': kLavandaPrimario,
+        'secondary': kLavandaSecund,
         'surface': Colors.white,
-        'background': kVerdeFondo,
-        'accent': kVerdeClaro,
+        'background': kLavandaFondo,
+        'accent': kLavandaClaro,
+      };
+    case ColorPalette.durazno:
+      return {
+        'primary': kDuraznoPrimario,
+        'secondary': kDuraznoSecund,
+        'surface': Colors.white,
+        'background': kDuraznoFondo,
+        'accent': kDuraznoClaro,
       };
     case ColorPalette.azul:
       return {
@@ -186,8 +200,10 @@ class ThemeController extends ChangeNotifier {
     switch (_palette) {
       case ColorPalette.rosa:
         return 'Rosa';
-      case ColorPalette.verde:
-        return 'Verde';
+      case ColorPalette.lavanda:
+        return 'Lavanda';
+      case ColorPalette.durazno:
+        return 'Durazno';
       case ColorPalette.azul:
         return 'Azul';
     }

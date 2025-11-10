@@ -551,13 +551,24 @@ Future<ColorPalette?> showColorPalettePicker(BuildContext context) {
               const SizedBox(height: 12),
 
               _ColorPaletteOption(
-                title: 'Verde',
-                subtitle: 'Paleta natural y fresca',
-                primaryColor: kVerdePrimario,
-                secondaryColor: kVerdeSecund,
-                accentColor: kVerdeClaro,
-                selected: current == ColorPalette.verde,
-                onTap: () => Navigator.pop(ctx, ColorPalette.verde),
+                title: 'Lavanda',
+                subtitle: 'Paleta elegante y relajante',
+                primaryColor: kLavandaPrimario,
+                secondaryColor: kLavandaSecund,
+                accentColor: kLavandaClaro,
+                selected: current == ColorPalette.lavanda,
+                onTap: () => Navigator.pop(ctx, ColorPalette.lavanda),
+              ),
+              const SizedBox(height: 12),
+
+              _ColorPaletteOption(
+                title: 'Durazno',
+                subtitle: 'Paleta cálida y acogedora',
+                primaryColor: kDuraznoPrimario,
+                secondaryColor: kDuraznoSecund,
+                accentColor: kDuraznoClaro,
+                selected: current == ColorPalette.durazno,
+                onTap: () => Navigator.pop(ctx, ColorPalette.durazno),
               ),
               const SizedBox(height: 12),
 
