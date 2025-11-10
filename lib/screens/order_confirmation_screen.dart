@@ -20,7 +20,7 @@ class OrderConfirmationScreen extends StatefulWidget {
 
 class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   // ====== Configuración de cálculo ======
-  static const double _ivaRate = 0.12; // Ecuador
+  static const double _ivaRate = 0.15; // Ecuador
 
   // Ventana y horario de retiro (ajusta a tu negocio)
   static const int _pickupWindowDays = 7; // permitir escoger hasta 7 días adelante

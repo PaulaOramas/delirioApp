@@ -17,7 +17,7 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   final cart = CartService();
 
-  static const double _ivaRate = 0.12; // 12% (EC)
+  static const double _ivaRate = 0.15; // 15% (EC)
 
   bool _saving = false;
 
