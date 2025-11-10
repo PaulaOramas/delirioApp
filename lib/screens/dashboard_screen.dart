@@ -5,6 +5,7 @@ import 'package:delirio_app/screens/product_screen.dart'; // Asegúrate que exis
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/models/product.dart';
+import 'package:delirio_app/services/cart_animation.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -86,7 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _addToCart(Product p) {
+  void _addToCart(Product p, [BuildContext? ctx]) {
     try {
       final item = CartItem(
         id: p.id,
@@ -97,9 +98,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         qty: 1,
       );
       _cart.addItem(item);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Añadido "${p.nombre}" al carrito')),
-      );
+      // Trigger flying animation if we have a start context
+      try {
+        if (ctx != null) {
+          final box = ctx.findRenderObject() as RenderBox?;
+          if (box != null) {
+            final center = box.localToGlobal(Offset(box.size.width / 2, box.size.height / 2));
+            final startRect = Rect.fromCenter(center: center, width: box.size.width, height: box.size.height);
+            // ignore: depend_on_referenced_packages
+            CartAnimation.animateAddToCart(context, startRect: startRect, imageUrl: item.imagen);
+          }
+        }
+      } catch (_) {}
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo agregar. Revisa CartService.')),
@@ -349,11 +359,13 @@ SizedBox(
                                       ),
                                     ],
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_shopping_cart_outlined),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                    onPressed: disponible ? () => _addToCart(p) : null,
+                                  Builder(
+                                    builder: (tileCtx) => IconButton(
+                                      icon: const Icon(Icons.add_shopping_cart_outlined),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                                      onPressed: disponible ? () => _addToCart(p, tileCtx) : null,
+                                    ),
                                   ),
                                 ],
                               ),

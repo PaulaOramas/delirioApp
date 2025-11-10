@@ -3,6 +3,7 @@ import 'package:delirio_app/screens/dashboard_screen.dart';
 import 'package:delirio_app/screens/search_screen.dart';
 import 'package:delirio_app/screens/cart_screen.dart';
 import 'package:delirio_app/services/cart_service.dart';
+import 'package:delirio_app/navigation.dart' as nav;
 import 'package:delirio_app/screens/profile_screen.dart';
 import 'package:delirio_app/theme.dart';
 
@@ -136,11 +137,16 @@ class _CustomNavBarState extends State<CustomNavBar> {
   Widget _buildNavItemWithBadge(IconData icon, String label, int index, ThemeData theme, int badgeCount) {
     final base = _buildNavItem(icon, label, index, theme);
     if (badgeCount <= 0) return base;
+    // If this is the cart icon, wrap base in a container with the global key
+    // so other screens can locate the cart's position for animations.
+    final Widget anchoredBase = icon == Icons.shopping_cart
+        ? Container(key: nav.cartIconKey, child: base)
+        : base;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        base,
+        anchoredBase,
         Positioned(
           top: -4,
           right: -4,

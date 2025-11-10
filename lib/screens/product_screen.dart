@@ -5,6 +5,7 @@ import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/models/product.dart';
 import 'package:delirio_app/screens/cart_screen.dart';
 import 'package:delirio_app/widgets/custom_navbar.dart'; // 👈 Importa el menú
+import 'package:delirio_app/services/cart_animation.dart';
 
 class ProductScreen extends StatefulWidget {
   final int productId;
@@ -77,33 +78,31 @@ class _ProductScreenState extends State<ProductScreen> {
       curve: Curves.easeOut,
     );
   }
+  // Key to locate the "Agregar al carrito" button for the add-to-cart animation
+  final GlobalKey _addButtonKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     if (_loading) {
-      return CustomNavBar(
-        child: Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
+      return Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_error != null) {
-      return CustomNavBar(
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Error')),
-          body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Ocurrió un error:\n$_error', textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _loadProduct,
-                  child: const Text('Reintentar'),
-                ),
-              ],
-            ),
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Ocurrió un error:\n$_error', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _loadProduct,
+                child: const Text('Reintentar'),
+              ),
+            ],
           ),
         ),
       );
@@ -111,11 +110,9 @@ class _ProductScreenState extends State<ProductScreen> {
 
     final p = _producto;
     if (p == null) {
-      return CustomNavBar(
-        child: Scaffold(
-          appBar: AppBar(title: Text('Producto')),
-          body: Center(child: Text('Producto no disponible')),
-        ),
+      return Scaffold(
+        appBar: AppBar(title: Text('Producto')),
+        body: Center(child: Text('Producto no disponible')),
       );
     }
 
@@ -126,9 +123,7 @@ class _ProductScreenState extends State<ProductScreen> {
         ? p.imagenes
         : (p.imageUrl.isNotEmpty ? [p.imageUrl] : ['https://via.placeholder.com/1200x800']);
 
-    // 👇 Aquí usamos directamente CustomNavBar como contenedor principal
-    return CustomNavBar(
-      child: Scaffold(
+    return Scaffold(
         appBar: AppBar(
           title: Text(p.nombre),
           centerTitle: true,
@@ -253,8 +248,7 @@ class _ProductScreenState extends State<ProductScreen> {
                               color: kFucsia,
                             ),
                           ),
-                          Text(estadoTexto,
-                              style: TextStyle(fontWeight: FontWeight.w600, color: colorEstado)),
+                          Text(estadoTexto, style: TextStyle(fontWeight: FontWeight.w600, color: colorEstado)),
                         ],
                       ),
                       const SizedBox(height: 30),
@@ -262,6 +256,7 @@ class _ProductScreenState extends State<ProductScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
+                          key: _addButtonKey,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: disponible ? kFucsia : Colors.grey.shade400,
                             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -272,19 +267,29 @@ class _ProductScreenState extends State<ProductScreen> {
                           onPressed: disponible
                               ? () {
                                   final cart = CartService();
-                                  cart.addItem(
-                                    CartItem(
-                                      id: p.id,
-                                      nombre: p.nombre,
-                                      categoria: p.categoria,
-                                      precio: p.precio,
-                                      imagen: imgs[_currentImage],
-                                      qty: 1,
-                                    ),
+                                  final item = CartItem(
+                                    id: p.id,
+                                    nombre: p.nombre,
+                                    categoria: p.categoria,
+                                    precio: p.precio,
+                                    imagen: imgs[_currentImage],
+                                    qty: 1,
                                   );
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('${p.nombre} agregado al carrito 🛒')),
-                                  );
+                                  cart.addItem(item);
+
+                                  // Try to animate a flying thumbnail from the button to the cart icon
+                                  try {
+                                    final renderBox = _addButtonKey.currentContext?.findRenderObject() as RenderBox?;
+                                    if (renderBox != null) {
+                                      final start = renderBox.localToGlobal(Offset(renderBox.size.width / 2, renderBox.size.height / 2));
+                                      final startRect = Rect.fromCenter(center: start, width: renderBox.size.width, height: renderBox.size.height);
+                                      CartAnimation.animateAddToCart(context, startRect: startRect, imageUrl: imgs[_currentImage]);
+                                    } else {
+                                      final size = MediaQuery.of(context).size;
+                                      final fallback = Rect.fromLTWH(size.width / 2 - 24, size.height - 120, 48, 48);
+                                      CartAnimation.animateAddToCart(context, startRect: fallback, imageUrl: imgs[_currentImage]);
+                                    }
+                                  } catch (_) {}
                                 }
                               : null,
                           icon: const Icon(Icons.shopping_cart_outlined),
@@ -302,8 +307,7 @@ class _ProductScreenState extends State<ProductScreen> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 
