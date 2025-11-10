@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
-import 'package:delirio_app/main.dart';
+
+// 🔹 Cambiar importación: ahora el menú principal es CustomNavBar
+import 'package:delirio_app/widgets/custom_navbar.dart';
 import 'package:delirio_app/screens/register_form_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  /// If [replaceWithMainOnSuccess] is true (default), a successful login will
-  /// navigate to the app shell (`MainScaffold`) and clear the back stack.
-  /// If false, the login screen will simply pop with `true` so the caller can
-  /// continue (useful when requiring login for a specific flow).
+  /// Si [replaceWithMainOnSuccess] es true (por defecto),
+  /// un inicio de sesión exitoso navegará al menú principal (`CustomNavBar`)
+  /// y limpiará la pila de navegación.
   const LoginScreen({super.key, this.replaceWithMainOnSuccess = true});
 
   final bool replaceWithMainOnSuccess;
@@ -48,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-  
+
   @override
   void dispose() {
     _userCtrl.dispose();
@@ -72,10 +73,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (ok) {
-        // navegar al shell principal o retornar al caller según el flag
+        // 🔹 Cambiado para usar CustomNavBar como nueva raíz
         if (widget.replaceWithMainOnSuccess) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const MainScaffold()),
+            MaterialPageRoute(builder: (_) => const CustomNavBar()),
             (route) => false,
           );
         } else {
