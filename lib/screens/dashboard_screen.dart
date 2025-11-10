@@ -206,23 +206,6 @@ SizedBox(
 ),
           const SizedBox(height: 16),
 
-          // ===== Buscador =====
-          TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: 'Buscar ramos, plantas o regalos',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Theme.of(context).cardColor,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            onSubmitted: _applyFilter,
-          ),
-          const SizedBox(height: 16),
-
           // ===== Categorías (demo) =====
           SizedBox(
             height: 96,
