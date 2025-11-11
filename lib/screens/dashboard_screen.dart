@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/screens/cart_screen.dart';
-import 'package:delirio_app/screens/product_screen.dart'; // Asegúrate que exista ProductScreen(productId: ...)
+import 'package:delirio_app/screens/product_screen.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/models/product.dart';
@@ -79,7 +79,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _openDetails(Product p) {
-    // ✅ Navega al detalle que consume GET /api/productos/{id}
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProductScreen(productId: p.id),

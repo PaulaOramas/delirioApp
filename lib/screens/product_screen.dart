@@ -3,8 +3,6 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/models/product.dart';
-import 'package:delirio_app/screens/cart_screen.dart';
-import 'package:delirio_app/widgets/custom_navbar.dart'; // 👈 Importa el menú
 import 'package:delirio_app/services/cart_animation.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -78,15 +76,13 @@ class _ProductScreenState extends State<ProductScreen> {
       curve: Curves.easeOut,
     );
   }
-  // Key to locate the "Agregar al carrito" button for the add-to-cart animation
+
   final GlobalKey _addButtonKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (_loading) {
-      return Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_error != null) {
@@ -110,8 +106,7 @@ class _ProductScreenState extends State<ProductScreen> {
 
     final p = _producto;
     if (p == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Producto')),
+      return const Scaffold(
         body: Center(child: Text('Producto no disponible')),
       );
     }
@@ -121,14 +116,19 @@ class _ProductScreenState extends State<ProductScreen> {
     final colorEstado = disponible ? Colors.green : Colors.red;
     final List<String> imgs = (p.imagenes.isNotEmpty)
         ? p.imagenes
-        : (p.imageUrl.isNotEmpty ? [p.imageUrl] : ['https://via.placeholder.com/1200x800']);
+        : (p.imageUrl.isNotEmpty
+            ? [p.imageUrl]
+            : ['https://via.placeholder.com/1200x800']);
 
     return Scaffold(
-        appBar: AppBar(
-          title: Text(p.nombre),
-          centerTitle: true,
-        ),
-        body: SafeArea(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(p.nombre),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 88),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: Column(
@@ -154,7 +154,8 @@ class _ProductScreenState extends State<ProductScreen> {
                             errorBuilder: (_, __, ___) => Container(
                               color: Colors.grey.shade200,
                               alignment: Alignment.center,
-                              child: const Icon(Icons.broken_image_outlined, size: 48),
+                              child: const Icon(Icons.broken_image_outlined,
+                                  size: 48),
                             ),
                           ),
                         ),
@@ -214,7 +215,8 @@ class _ProductScreenState extends State<ProductScreen> {
                     children: [
                       if (p.categoria.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: kFucsia.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(12),
@@ -231,10 +233,19 @@ class _ProductScreenState extends State<ProductScreen> {
 
                       Text(
                         p.nombre,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Text(p.descripcion, style: const TextStyle(fontSize: 16, height: 1.4)),
+
+                      // 🔹 FIX: Evitar desbordes y superposición
+                      Text(
+                        p.descripcion,
+                        style: const TextStyle(fontSize: 16, height: 1.4),
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
                       const SizedBox(height: 16),
 
                       Row(
@@ -248,7 +259,13 @@ class _ProductScreenState extends State<ProductScreen> {
                               color: kFucsia,
                             ),
                           ),
-                          Text(estadoTexto, style: TextStyle(fontWeight: FontWeight.w600, color: colorEstado)),
+                          Text(
+                            estadoTexto,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: colorEstado,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 30),
@@ -258,7 +275,8 @@ class _ProductScreenState extends State<ProductScreen> {
                         child: ElevatedButton.icon(
                           key: _addButtonKey,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: disponible ? kFucsia : Colors.grey.shade400,
+                            backgroundColor:
+                                disponible ? kFucsia : Colors.grey.shade400,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -277,24 +295,34 @@ class _ProductScreenState extends State<ProductScreen> {
                                   );
                                   cart.addItem(item);
 
-                                  // Try to animate a flying thumbnail from the button to the cart icon
-                                  try {
-                                    final renderBox = _addButtonKey.currentContext?.findRenderObject() as RenderBox?;
-                                    if (renderBox != null) {
-                                      final start = renderBox.localToGlobal(Offset(renderBox.size.width / 2, renderBox.size.height / 2));
-                                      final startRect = Rect.fromCenter(center: start, width: renderBox.size.width, height: renderBox.size.height);
-                                      CartAnimation.animateAddToCart(context, startRect: startRect, imageUrl: imgs[_currentImage]);
-                                    } else {
-                                      final size = MediaQuery.of(context).size;
-                                      final fallback = Rect.fromLTWH(size.width / 2 - 24, size.height - 120, 48, 48);
-                                      CartAnimation.animateAddToCart(context, startRect: fallback, imageUrl: imgs[_currentImage]);
+                                  // Mostrar dialog simple
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('✓ Agregado'),
+                                      content: Text('${p.nombre} fue agregado al carrito'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.of(ctx).pop(),
+                                          child: const Text('Cerrar'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  // Cerrar automáticamente después de 1.5 segundos
+                                  Future.delayed(const Duration(milliseconds: 1500), () {
+                                    if (mounted && Navigator.of(context).canPop()) {
+                                      Navigator.of(context).pop();
                                     }
-                                  } catch (_) {}
+                                  });
                                 }
                               : null,
                           icon: const Icon(Icons.shopping_cart_outlined),
                           label: Text(
-                            disponible ? 'Agregar al carrito' : 'No disponible',
+                            disponible
+                                ? 'Agregar al carrito'
+                                : 'No disponible',
                             style: const TextStyle(fontSize: 18),
                           ),
                         ),
@@ -307,7 +335,8 @@ class _ProductScreenState extends State<ProductScreen> {
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }
 
