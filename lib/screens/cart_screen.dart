@@ -5,7 +5,7 @@ import 'package:delirio_app/screens/order_confirmation_screen.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 import 'package:delirio_app/services/product_service.dart';
-import 'package:delirio_app/screens/dashboard_screen.dart';
+import 'package:delirio_app/navigation.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -18,17 +18,13 @@ class _CartScreenState extends State<CartScreen> {
   final cart = CartService();
 
   static const double _ivaRate = 0.15; // 15% (EC)
-
   bool _saving = false;
-
-  // cache de stock por productoId
   final Map<int, int> _stockById = {};
   bool _loadingStock = false;
 
   @override
   void initState() {
     super.initState();
-    // cuando cambie el carrito, recargo stock
     cart.items.addListener(_refreshStocks);
     _refreshStocks();
   }
@@ -50,14 +46,12 @@ class _CartScreenState extends State<CartScreen> {
 
     setState(() => _loadingStock = true);
     try {
-      // cargo stock para ids únicos
       final ids = items.map((e) => e.id).toSet().toList();
       for (final id in ids) {
         try {
           final p = await ProductService.getById(id);
-          _stockById[id] = p.stock ?? 0; // ajusta si tu Product tiene "stock"
+          _stockById[id] = p.stock ?? 0;
         } catch (_) {
-          // si falla, deja stock 0 para ese producto (no dejar comprar)
           _stockById[id] = 0;
         }
       }
@@ -65,7 +59,6 @@ class _CartScreenState extends State<CartScreen> {
       setState(() => _loadingStock = false);
     }
 
-    // si alguna qty > stock, la bajo
     bool changed = false;
     for (final it in items) {
       final max = _stockById[it.id] ?? 0;
@@ -98,8 +91,12 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _decQty(CartItem it) {
-    setState(() => it.qty = (it.qty - 1).clamp(1, 99));
-    cart.items.notifyListeners();
+    if (it.qty == 1) {
+      _remove(it);
+    } else {
+      setState(() => it.qty = (it.qty - 1).clamp(1, 99));
+      cart.items.notifyListeners();
+    }
   }
 
   void _remove(CartItem it) => cart.removeItem(it.id);
@@ -111,23 +108,29 @@ class _CartScreenState extends State<CartScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Inicia sesión'),
-        content: const Text('Necesitas iniciar sesión para completar tu pedido.'),
+        content:
+            const Text('Necesitas iniciar sesión para completar tu pedido.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Iniciar sesión')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Iniciar sesión')),
         ],
       ),
     );
     if (goLogin == true) {
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const LoginScreen(replaceWithMainOnSuccess: false)),
+        MaterialPageRoute(
+            builder: (_) =>
+                const LoginScreen(replaceWithMainOnSuccess: false)),
       );
       setState(() {});
     }
     return AuthService.instance.isLoggedIn();
   }
 
-  // Valida que ninguna qty exceda stock. Si excede, la ajusta y notifica.
   bool _enforceMaxStock(List<CartItem> items) {
     bool adjusted = false;
     final msgs = <String>[];
@@ -145,7 +148,7 @@ class _CartScreenState extends State<CartScreen> {
       final text = 'Ajustamos por stock:\n• ' + msgs.join('\n• ');
       _snack(text);
     }
-    return !adjusted; // true si todo ok; false si hubo ajustes
+    return !adjusted;
   }
 
   Future<void> _goToConfirmation(List<CartItem> items) async {
@@ -158,25 +161,18 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    // fuerza cantidades contra stock
     final okStock = _enforceMaxStock(items);
     if (!okStock) return;
 
-    // Requiere login antes de confirmar
     final ok = await _ensureLoggedIn();
     if (!ok) return;
 
-    // Si aquí quisieras DESCONTAR stock en la API antes de ir a confirmar,
-    // puedes hacerlo en este punto (transacción real sugerida en backend).
-    // Ejemplo optimista (usa SOLO una de las variantes del ProductService):
-    
     setState(() => _saving = true);
     try {
       for (final it in items) {
         final current = _stockById[it.id] ?? 0;
         final newStock = (current - it.qty).clamp(0, 1 << 31);
         await ProductService.updateStockOnly(it.id, newStock);
-        // o: await ProductService.updateProductStockFull(it.id, newStock);
         _stockById[it.id] = newStock;
       }
     } catch (e) {
@@ -210,25 +206,40 @@ class _CartScreenState extends State<CartScreen> {
             valueListenable: cart.items,
             builder: (context, items, _) {
               if (items.isEmpty) return const SizedBox.shrink();
-              return IconButton(
-                tooltip: 'Vaciar carrito',
-                onPressed: _saving
-                    ? null
-                    : () async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Vaciar carrito'),
-                            content: const Text('Se eliminarán todos los productos.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Vaciar')),
-                            ],
-                          ),
-                        );
-                        if (ok == true) _clearCart();
-                      },
-                icon: const Icon(Icons.delete_outline),
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: TextButton(
+                  onPressed: _saving
+                      ? null
+                      : () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Vaciar carrito'),
+                              content: const Text(
+                                  'Se eliminarán todos los productos.'),
+                              actions: [
+                                TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(ctx, false),
+                                    child: const Text('Cancelar')),
+                                FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Vaciar')),
+                              ],
+                            ),
+                          );
+                          if (ok == true) _clearCart();
+                        },
+                  child: Text(
+                    'Vaciar carrito',
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
               );
             },
           ),
@@ -249,7 +260,8 @@ class _CartScreenState extends State<CartScreen> {
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                           itemCount: items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             final it = items[i];
                             final max = _stockById[it.id] ?? 0;
@@ -257,24 +269,33 @@ class _CartScreenState extends State<CartScreen> {
 
                             return Dismissible(
                               key: ValueKey('${it.id}-$i'),
-                              direction: _saving ? DismissDirection.none : DismissDirection.endToStart,
+                              direction: _saving
+                                  ? DismissDirection.none
+                                  : DismissDirection.endToStart,
                               onDismissed: (_) => _remove(it),
                               background: Container(
                                 alignment: Alignment.centerRight,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.errorContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .errorContainer,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Icon(Icons.delete, color: Theme.of(context).colorScheme.onErrorContainer),
+                                child: Icon(Icons.delete,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer),
                               ),
                               child: _CartTile(
                                 item: it,
-                                stock: max,                   // <- stock actual
-                                reachedMax: reachedMax,       // <- ya alcanzó el máximo
+                                stock: max,
+                                reachedMax: reachedMax,
                                 onDec: _saving ? null : () => _decQty(it),
                                 onInc: _saving ? null : () => _incQty(it),
-                                onRemove: _saving ? null : () => _remove(it),
+                                onRemove:
+                                    _saving ? null : () => _remove(it),
                               ),
                             );
                           },
@@ -285,7 +306,9 @@ class _CartScreenState extends State<CartScreen> {
                         iva: _iva(items),
                         total: _total(items),
                         isLoading: _saving || _loadingStock,
-                        onCheckout: (_saving || _loadingStock) ? null : () => _goToConfirmation(items),
+                        onCheckout: (_saving || _loadingStock)
+                            ? null
+                            : () => _goToConfirmation(items),
                       ),
                     ],
                   );
@@ -323,12 +346,12 @@ class _CartTile extends StatelessWidget {
       return Card(
         elevation: 0,
         color: theme.colorScheme.surfaceContainerHighest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Imagen segura
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
@@ -339,21 +362,22 @@ class _CartTile extends StatelessWidget {
                     child: img.isEmpty
                         ? Container(
                             color: theme.colorScheme.surfaceVariant,
-                            child: const Icon(Icons.local_florist, size: 28),
+                            child:
+                                const Icon(Icons.local_florist, size: 28),
                           )
                         : Image.network(
                             img,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                               color: theme.colorScheme.surfaceVariant,
-                              child: const Icon(Icons.local_florist, size: 28),
+                              child: const Icon(Icons.local_florist,
+                                  size: 28),
                             ),
                           ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              // Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,7 +385,8 @@ class _CartTile extends StatelessWidget {
                     Text(item.nombre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     Text(
                       item.categoria,
@@ -370,11 +395,12 @@ class _CartTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    // Stock hint
                     Text(
                       noStock ? 'Sin stock' : 'Quedan $stock',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: noStock ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant,
+                        color: noStock
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -388,20 +414,20 @@ class _CartTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Controles de cantidad
                     Row(
                       children: [
                         _QtyButton(icon: Icons.remove, onTap: onDec),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text('${item.qty}', style: theme.textTheme.titleMedium),
+                          child: Text('${item.qty}',
+                              style: theme.textTheme.titleMedium),
                         ),
-                        // Deshabilita el '+' si alcanzó stock o si no hay stock
                         AbsorbPointer(
                           absorbing: reachedMax || noStock,
                           child: Opacity(
                             opacity: (reachedMax || noStock) ? 0.4 : 1,
-                            child: _QtyButton(icon: Icons.add, onTap: onInc),
+                            child:
+                                _QtyButton(icon: Icons.add, onTap: onInc),
                           ),
                         ),
                         const Spacer(),
@@ -429,8 +455,12 @@ class _CartTile extends StatelessWidget {
             children: [
               const Icon(Icons.error_outline, color: Colors.red),
               const SizedBox(width: 12),
-              Expanded(child: Text('Error al mostrar este producto', style: TextStyle(color: Colors.red.shade700))),
-              IconButton(onPressed: onRemove, icon: const Icon(Icons.delete_outline)),
+              Expanded(
+                  child: Text('Error al mostrar este producto',
+                      style: TextStyle(color: Colors.red.shade700))),
+              IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline)),
             ],
           ),
         ),
@@ -442,7 +472,6 @@ class _CartTile extends StatelessWidget {
 class _QtyButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
-
   const _QtyButton({required this.icon, required this.onTap});
 
   @override
@@ -451,7 +480,9 @@ class _QtyButton extends StatelessWidget {
     final disabled = onTap == null;
     return Ink(
       decoration: BoxDecoration(
-        color: disabled ? theme.disabledColor.withOpacity(.1) : theme.colorScheme.surfaceVariant,
+        color: disabled
+            ? theme.disabledColor.withOpacity(.1)
+            : theme.colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(10),
       ),
       child: InkWell(
@@ -459,27 +490,17 @@ class _QtyButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18, color: disabled ? theme.disabledColor : null),
+          child: Icon(icon,
+              size: 18, color: disabled ? theme.disabledColor : null),
         ),
       ),
     );
   }
 }
 
-// Widget que se muestra cuando el carrito está vacío
 class _EmptyState extends StatelessWidget {
-  final VoidCallback onExplore; // no lo usamos, pero se mantiene por compatibilidad
+  final VoidCallback onExplore;
   const _EmptyState({required this.onExplore});
-
-  void _goToDashboard(BuildContext context) {
-    // 1) Limpiar pila hasta la raíz
-    Navigator.of(context).popUntil((route) => route.isFirst);
-
-    // 2) Abrir Dashboard
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -496,13 +517,13 @@ class _EmptyState extends StatelessWidget {
             child: Card(
               elevation: 0,
               color: theme.colorScheme.surfaceContainerHighest,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Ilustración
                     Container(
                       width: 92,
                       height: 92,
@@ -522,16 +543,12 @@ class _EmptyState extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Título
                     Text(
                       'Tu carrito está vacío',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
-
-                    // Subtítulo
                     Text(
                       'Explora ramos, plantas y detallitos. ¡Tenemos algo para cada ocasión! 🌸',
                       textAlign: TextAlign.center,
@@ -540,8 +557,6 @@ class _EmptyState extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Micro-beneficios
                     Wrap(
                       alignment: WrapAlignment.center,
                       spacing: 10,
@@ -552,10 +567,6 @@ class _EmptyState extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
-
-                    // CTA primario: va a Dashboard
-
-                    // CTA secundario: intenta volver una pantalla, si no, dashboard
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -566,11 +577,8 @@ class _EmptyState extends StatelessWidget {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: () {
-                          if (Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          } else {
-                            _goToDashboard(context);
-                          }
+                          // Cambiar a la pantalla del Dashboard (index 0)
+                          bottomNavIndex.value = 0;
                         },
                       ),
                     ),
@@ -585,7 +593,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ÚNICA clase de “chip” para evitar duplicados
 class _BenefitPill extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -619,7 +626,6 @@ class _BenefitPill extends StatelessWidget {
   }
 }
 
-// Resumen / tarjeta con total y botón de confirmar
 class _SummaryCard extends StatelessWidget {
   final double subtotal;
   final double iva;

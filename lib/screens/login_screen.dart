@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
-
-// 🔹 Cambiar importación: ahora el menú principal es CustomNavBar
 import 'package:delirio_app/widgets/custom_navbar.dart';
 import 'package:delirio_app/screens/register_form_screen.dart';
+import 'package:delirio_app/screens/profile_screen.dart';
+import 'package:delirio_app/navigation.dart' as nav;
 
 class LoginScreen extends StatefulWidget {
-  /// Si [replaceWithMainOnSuccess] es true (por defecto),
-  /// un inicio de sesión exitoso navegará al menú principal (`CustomNavBar`)
-  /// y limpiará la pila de navegación.
   const LoginScreen({super.key, this.replaceWithMainOnSuccess = true});
-
   final bool replaceWithMainOnSuccess;
 
   @override
@@ -33,13 +29,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(
-        color: isDark ? Colors.white70 : Colors.grey[600],
-      ),
-      prefixIcon: Icon(
-        icon,
-        color: isDark ? Colors.white70 : Colors.grey[700],
-      ),
+      hintStyle: TextStyle(color: isDark ? Colors.white70 : Colors.grey[600]),
+      prefixIcon: Icon(icon, color: isDark ? Colors.white70 : Colors.grey[700]),
       filled: true,
       fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.white.withOpacity(0.9),
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
@@ -73,9 +64,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (ok) {
-        // 🔹 Cambiado para usar CustomNavBar como nueva raíz
         if (widget.replaceWithMainOnSuccess) {
-          Navigator.of(context).pushAndRemoveUntil(
+          // Podrías elegir a qué tab ir tras login. Por defecto dejamos el que ya esté seleccionado.
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const CustomNavBar()),
             (route) => false,
           );
@@ -97,14 +88,64 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Navega al Dashboard Screen
+void _goBackToDashboard() {
+  // Cambiar el tab global al Perfil (índice 3)
+  nav.bottomNavIndex.value = 0;
+
+  // Navegar al CustomNavBar con ese tab activo
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const CustomNavBar()),
+    (route) => false,
+  );
+}
+
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface,
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+        ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: _goBackToDashboard,
+              tooltip: 'Volver al perfil',
+              splashRadius: 20,
+            ),
+          ),
+        ),
+        leadingWidth: 56,
+      ),
       body: Stack(
         children: [
-          // Fondo con degradado
+          // Fondo con degradado horizontal
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -112,11 +153,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   Theme.of(context).colorScheme.primary,
                   Theme.of(context).colorScheme.surface,
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
               ),
             ),
           ),
+
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -156,7 +198,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Text('Iniciar sesión', style: Theme.of(context).textTheme.titleLarge),
+                                Text(
+                                  'Iniciar sesión',
+                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.primary,
+                                      ),
+                                ),
                                 const SizedBox(height: 12),
 
                                 // Usuario
@@ -180,7 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onFieldSubmitted: (_) => _onLogin(),
                                   decoration: _inputDecoration(hint: 'Contraseña', icon: Icons.lock).copyWith(
                                     suffixIcon: IconButton(
-                                      icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                                      icon: Icon(
+                                        _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                      ),
                                       onPressed: () => setState(() => _obscure = !_obscure),
                                       tooltip: _obscure ? 'Mostrar contraseña' : 'Ocultar contraseña',
                                     ),
@@ -234,9 +284,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                       onPressed: _loading
                                           ? null
                                           : () {
-                                              Navigator.of(context).push(MaterialPageRoute(
-                                                builder: (_) => const RegisterFormScreen(role: UserRole.usuario),
-                                              ));
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => const RegisterFormScreen(role: UserRole.usuario),
+                                                ),
+                                              );
                                             },
                                       child: const Text('Crear cuenta'),
                                     ),

@@ -26,6 +26,25 @@ class _CustomNavBarState extends State<CustomNavBar> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Escuchar cambios en bottomNavIndex
+    nav.bottomNavIndex.addListener(_onNavIndexChanged);
+  }
+
+  @override
+  void dispose() {
+    nav.bottomNavIndex.removeListener(_onNavIndexChanged);
+    super.dispose();
+  }
+
+  void _onNavIndexChanged() {
+    setState(() {
+      _currentIndex = nav.bottomNavIndex.value;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
@@ -78,7 +97,9 @@ class _CustomNavBarState extends State<CustomNavBar> {
     final inactiveColor = theme.iconTheme.color ?? theme.colorScheme.onSurfaceVariant;
 
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        nav.bottomNavIndex.value = index;
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         width: 60,
@@ -102,7 +123,9 @@ class _CustomNavBarState extends State<CustomNavBar> {
     final inactiveTextColor = theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
 
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = 1),
+      onTap: () {
+        nav.bottomNavIndex.value = 1;
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         width: isActive ? 60 : 140, // cuando activo se contrae a solo el icono
