@@ -42,7 +42,7 @@ dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/images/estatusLogoOff.png"
+  image_path: "assets/images/estatusLogoTest.png"
   adaptive_icon_background: "#FFFFFF"   # color de fondo (opcional)
   adaptive_icon_foreground: "assets/images/estatusLogoOff.png"
   # The following adds the Cupertino Icons font to your application.
