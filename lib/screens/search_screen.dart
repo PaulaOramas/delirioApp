@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/screens/product_screen.dart';
-
-
-// MODELO + SERVICIO
 import 'package:delirio_app/models/product.dart';
 import 'package:delirio_app/services/product_service.dart';
 
@@ -32,6 +29,10 @@ class _SearchScreenState extends State<SearchScreen> {
   // Estado de búsqueda/filtro
   bool _showSuggestions = true;
   String? _selectedCategory; // null = sin filtro por categoría
+  
+  // Filtros avanzados
+  double _priceMax = 150;
+  Set<String> _selectedCategories = {};
 
   @override
   void initState() {
@@ -73,22 +74,34 @@ class _SearchScreenState extends State<SearchScreen> {
     final text = _controller.text.trim();
     final hasText = text.length >= 2;
     final hasCategory = (_selectedCategory != null && _selectedCategory!.isNotEmpty);
+    final hasAdvancedFilters = _selectedCategories.isNotEmpty || _priceMax < 150;
 
     List<Product> result = _all;
 
+    // Filtro por texto de búsqueda (prioridad)
     if (hasText) {
       final q = _norm(text);
       result = result.where((p) => _norm(p.nombre).contains(q)).toList();
     } else if (hasCategory) {
+      // Filtro por categoría simple (chips)
       final cat = _norm(_selectedCategory);
       result = result.where((p) => _norm(p.categoria) == cat).toList();
-    } else {
-      result = [];
+    } else if (hasAdvancedFilters) {
+      // Si no hay búsqueda de texto, aplicar filtros avanzados
+      if (_selectedCategories.isNotEmpty) {
+        result = result.where((p) => _selectedCategories.contains(_norm(p.categoria))).toList();
+      }
     }
+    
+    // Siempre aplicar filtros de precio
+    result = result.where((p) => p.precio <= _priceMax).toList();
+    
+    // Siempre filtrar solo productos disponibles (stock > 0)
+    result = result.where((p) => p.stock > 0).toList();
 
     setState(() {
       _filtered = result;
-      _showSuggestions = !(hasText || hasCategory);
+      _showSuggestions = !(hasText || hasCategory || hasAdvancedFilters);
     });
   }
 
@@ -167,7 +180,26 @@ class _SearchScreenState extends State<SearchScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (ctx) => const _FiltersSheet(),
+      builder: (ctx) => _FiltersSheet(
+        initialPriceMax: _priceMax,
+        initialSelectedCategories: _selectedCategories.toSet(),
+        onApply: (priceMax, selectedCategories) {
+          setState(() {
+            _priceMax = priceMax;
+            _selectedCategories = selectedCategories;
+          });
+          _applyFilters();
+          Navigator.pop(ctx);
+        },
+        onClearFilters: () {
+          setState(() {
+            _priceMax = 150;
+            _selectedCategories = {};
+          });
+          _applyFilters();
+          Navigator.pop(ctx);
+        },
+      ),
     );
   }
 
@@ -180,14 +212,8 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Buscar'),
-          actions: [
-            IconButton(
-              tooltip: 'Filtros',
-              onPressed: _openFilters,
-              icon: const Icon(Icons.tune),
-            ),
-          ],
         ),
+
         body: SafeArea(
           child: _loadingAll
               ? const _InitialLoading()
@@ -205,7 +231,9 @@ class _SearchScreenState extends State<SearchScreen> {
                             onSubmitted: _submitSearch,
                             onChanged: _onTextChanged,
                             onClear: _clearSearch,
+                            onOpenFilters: _openFilters,
                           ),
+
                           const SizedBox(height: 16),
 
                           _SectionTitle('Categorías'),
@@ -260,12 +288,13 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-class _SearchBar extends StatelessWidget {
+class _SearchBar extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+  final VoidCallback onOpenFilters;
 
   const _SearchBar({
     required this.controller,
@@ -273,43 +302,60 @@ class _SearchBar extends StatelessWidget {
     required this.onSubmitted,
     required this.onChanged,
     required this.onClear,
+    required this.onOpenFilters,
   });
 
+  @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(16),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        textInputAction: TextInputAction.search,
-        onSubmitted: onSubmitted,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: 'Busca ramos, plantas o regalos',
-          prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.primary),
-          suffixIcon: controller.text.isEmpty
-              ? IconButton(
-                  tooltip: 'Filtros',
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Abre el botón de filtros arriba (UI demo)')),
-                  ),
-                  icon: const Icon(Icons.tune),
-                )
-              : IconButton(
-                  tooltip: 'Limpiar',
-                  onPressed: onClear,
-                  icon: const Icon(Icons.close),
-                ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        ),
+      child: Row(
+        children: [
+          const SizedBox(width: 8),
+          Icon(Icons.search, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: widget.onSubmitted,
+              onChanged: (value) {
+                widget.onChanged(value);
+                setState(() {}); // Actualizar el estado del botón limpiar
+              },
+              decoration: const InputDecoration(
+                hintText: 'Busca ramos, plantas o regalos',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 0, vertical: 14),
+              ),
+            ),
+          ),
+          if (widget.controller.text.isNotEmpty)
+            IconButton(
+              tooltip: 'Limpiar',
+              onPressed: widget.onClear,
+              icon: const Icon(Icons.close),
+            ),
+          IconButton(
+            tooltip: 'Filtros',
+            onPressed: widget.onOpenFilters,
+            icon: const Icon(Icons.tune),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
     );
   }
 }
+
 
 class _SectionTitle extends StatelessWidget {
   final String text;
@@ -608,95 +654,149 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-class _FiltersSheet extends StatelessWidget {
-  const _FiltersSheet();
+class _FiltersSheet extends StatefulWidget {
+  final double initialPriceMax;
+  final Set<String> initialSelectedCategories;
+  final Function(double, Set<String>) onApply;
+  final VoidCallback onClearFilters;
+
+  const _FiltersSheet({
+    required this.initialPriceMax,
+    required this.initialSelectedCategories,
+    required this.onApply,
+    required this.onClearFilters,
+  });
+
+  @override
+  State<_FiltersSheet> createState() => _FiltersSheetState();
+}
+
+class _FiltersSheetState extends State<_FiltersSheet> {
+  late double _tempPrice;
+  late Set<String> _tempSelectedCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempPrice = widget.initialPriceMax;
+    _tempSelectedCategories = widget.initialSelectedCategories.toSet();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    double price = 35;
+    final categories = {'Ramos', 'Plantas', 'Regalos'};
 
-    return StatefulBuilder(
-      builder: (ctx, setState) => Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-          top: 12,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Filtros', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.local_florist_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Tipo'),
-                    value: 'Ramos',
-                    items: const [
-                      DropdownMenuItem(value: 'Ramos', child: Text('Ramos')),
-                      DropdownMenuItem(value: 'Plantas', child: Text('Plantas')),
-                      DropdownMenuItem(value: 'Regalos', child: Text('Regalos')),
-                    ],
-                    onChanged: (_) {},
-                  ),
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        top: 12,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Filtros avanzados', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 16),
+          
+          // Precio máximo
+          Row(
+            children: [
+              const Icon(Icons.attach_money),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Precio máximo: \$${_tempPrice.toStringAsFixed(0)}'),
+                    Slider(
+                      value: _tempPrice,
+                      min: 10,
+                      max: 200,
+                      divisions: 19,
+                      label: '\$${_tempPrice.toStringAsFixed(0)}',
+                      onChanged: (v) => setState(() => _tempPrice = v),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Categorías
+          Row(
+            children: [
+              const Icon(Icons.local_florist_outlined),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Categorías'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: categories.map((cat) {
+                        final selected = _tempSelectedCategories.contains(cat);
+                        return FilterChip(
+                          label: Text(cat),
+                          selected: selected,
+                          onSelected: (sel) {
+                            setState(() {
+                              if (sel) {
+                                _tempSelectedCategories.add(cat);
+                              } else {
+                                _tempSelectedCategories.remove(cat);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Botones
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    widget.onApply(_tempPrice, _tempSelectedCategories);
+                  },
+                  icon: const Icon(Icons.check),
+                  label: const Text('Aplicar'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Botón para limpiar filtros
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.onClearFilters,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Limpiar filtros'),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(Icons.attach_money),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Precio máximo'),
-                      Slider(
-                        value: price,
-                        min: 10,
-                        max: 150,
-                        divisions: 14,
-                        label: '\$${price.toStringAsFixed(0)}',
-                        onChanged: (v) => setState(() => price = v),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Cancelar'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Filtros aplicados (UI demo)')),
-                      );
-                    },
-                    icon: const Icon(Icons.check),
-                    label: const Text('Aplicar'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
