@@ -16,6 +16,8 @@ class RegisterFormScreen extends StatefulWidget {
 class _RegisterFormScreenState extends State<RegisterFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  final ValueNotifier<bool> _canSubmitNotifier = ValueNotifier(false);
+
   final _nombreCtrl = TextEditingController();
   final _apellidoCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
@@ -259,6 +261,13 @@ class _RegisterFormScreenState extends State<RegisterFormScreen> {
               child: Form(
                 key: _formKey,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
+                onChanged: () {
+                  final valid = _formKey.currentState?.validate() ?? false;
+                  _canSubmitNotifier.value = !_loading && _acceptTerms && valid;
+
+                  // 👇 fuerza un rebuild para que se reevalúe _canSubmit y el botón cambie
+                  setState(() {});
+                },
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -410,7 +419,14 @@ class _RegisterFormScreenState extends State<RegisterFormScreen> {
                         suffixIcon: IconButton(
                           icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
                           tooltip: _obscure ? 'Mostrar' : 'Ocultar',
-                          onPressed: () => setState(() => _obscure = !_obscure),
+                          onPressed: () {
+                            setState(() {
+                              _obscure = !_obscure;
+                            });
+                            final valid = _formKey.currentState?.validate() ?? false;
+                            _canSubmitNotifier.value = !_loading && _acceptTerms && valid;
+                          },
+
                         ),
                       ),
                       validator: _validatePassword,
@@ -446,7 +462,13 @@ class _RegisterFormScreenState extends State<RegisterFormScreen> {
                         suffixIcon: IconButton(
                           icon: Icon(_obscure2 ? Icons.visibility_off : Icons.visibility),
                           tooltip: _obscure2 ? 'Mostrar' : 'Ocultar',
-                          onPressed: () => setState(() => _obscure2 = !_obscure2),
+                          onPressed: () {
+                            setState(() {
+                              _obscure2 = !_obscure2;
+                            });
+                            final valid = _formKey.currentState?.validate() ?? false;
+                            _canSubmitNotifier.value = !_loading && _acceptTerms && valid;
+                          },
                         ),
                       ),
                       validator: _validatePassword2,
@@ -459,11 +481,25 @@ class _RegisterFormScreenState extends State<RegisterFormScreen> {
                       children: [
                         Checkbox(
                           value: _acceptTerms,
-                          onChanged: (v) => setState(() => _acceptTerms = v ?? false),
+                          onChanged: (v) {
+                            setState(() {
+                              _acceptTerms = v ?? false;
+                            });
+                            final valid = _formKey.currentState?.validate() ?? false;
+                            _canSubmitNotifier.value = !_loading && _acceptTerms && valid;
+                          },
                         ),
+
                         Expanded(
                           child: GestureDetector(
-                            onTap: () => setState(() => _acceptTerms = !_acceptTerms),
+                            onTap: () { 
+                              setState(() {
+                                _acceptTerms = !_acceptTerms;
+                              });
+                              final valid = _formKey.currentState?.validate() ?? false;
+                              _canSubmitNotifier.value = !_loading && _acceptTerms && valid;
+                            },
+
                             child: Text.rich(
                               TextSpan(
                                 text: 'Acepto los ',
