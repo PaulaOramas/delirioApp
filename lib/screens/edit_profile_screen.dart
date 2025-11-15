@@ -355,7 +355,7 @@ appBar: AppBar(
     onPressed: () => Navigator.of(context).maybePop(),
     icon: const Icon(Icons.arrow_back),
   ),
-  title: Text(_isEditing ? 'Datos (edición)' : 'Datos'),
+  title: Text(_isEditing ? 'Editar' : 'Datos'),
   actions: [
     IconButton(
       tooltip: _isEditing ? 'Cancelar edición' : 'Editar',
@@ -407,7 +407,7 @@ appBar: AppBar(
                                     Text(
                                       _isEditing
                                           ? 'Estás editando tus datos'
-                                          : 'Esta es una simulación sin API.',
+                                          : 'Estos son los datos que registraste',
                                       style: theme.textTheme.bodySmall?.copyWith(
                                         color: theme.hintColor,
                                       ),
@@ -475,48 +475,53 @@ appBar: AppBar(
                           ),
                           const SizedBox(height: 12),
 
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).cardColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: DropdownButton<String>(
-                                  value: _countryCode,
-                                  underline: const SizedBox.shrink(),
-                                  items: const [
-                                    DropdownMenuItem(value: '+593', child: Text('🇪🇨 +593')),
-                                    DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
-                                    DropdownMenuItem(value: '+52', child: Text('🇲🇽 +52')),
-                                  ],
-                                  onChanged: _isEditing
-                                      ? (v) => setState(() => _countryCode = v ?? '+593')
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _telefonoCtrl,
-                                  readOnly: !_isEditing,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(
-                                        _countryCode == '+593' ? 10 : 15),
-                                  ],
-                                  textInputAction: TextInputAction.next,
-                                  autofillHints: const [AutofillHints.telephoneNumber],
-                                  decoration: _dec(context, 'Teléfono', Icons.phone,
-                                      helperText: _countryCode == '+593'
-                                          ? 'Debe empezar con 09 (10 dígitos)'
-                                          : null),
-                                  validator: _validatePhone,
-                                ),
-                              ),
+                          TextFormField(
+                            controller: _telefonoCtrl,
+                            readOnly: !_isEditing,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(10),
                             ],
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.telephoneNumber],
+                            decoration: InputDecoration(
+                              labelText: 'Teléfono',
+                              helperText: 'Debe empezar con 09 (10 dígitos)',
+                              prefixIcon: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '🇪🇨 +593',
+                                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.phone, size: 20),
+                                  const SizedBox(width: 8),
+                                ],
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(context).colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+                              ),
+                              helperMaxLines: 3,
+                              errorMaxLines: 3,
+                            ),
+                            validator: _validatePhone,
                           ),
                           const SizedBox(height: 12),
 
