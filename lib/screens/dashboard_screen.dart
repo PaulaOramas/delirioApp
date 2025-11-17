@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
-import 'package:delirio_app/screens/cart_screen.dart';
 import 'package:delirio_app/screens/product_screen.dart';
 import 'package:delirio_app/services/cart_service.dart';
 import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/models/product.dart';
 import 'package:delirio_app/services/cart_animation.dart';
+import 'package:delirio_app/screens/promotions_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -49,7 +49,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = true;
         _error = null;
       });
+
       final list = await ProductService.getAllProducts();
+
       setState(() {
         _all = list;
         _filtered = list;
@@ -68,7 +70,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() => _filtered = _all);
       return;
     }
+
     final query = q.toLowerCase();
+
     setState(() {
       _filtered = _all.where((p) {
         return p.nombre.toLowerCase().contains(query) ||
@@ -96,22 +100,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
         imagen: p.imagenes.isNotEmpty ? p.imagenes.first : null,
         qty: 1,
       );
+
       _cart.addItem(item);
-      // Trigger flying animation if we have a start context
+
+      // Animación del carrito
       try {
         if (ctx != null) {
           final box = ctx.findRenderObject() as RenderBox?;
           if (box != null) {
-            final center = box.localToGlobal(Offset(box.size.width / 2, box.size.height / 2));
-            final startRect = Rect.fromCenter(center: center, width: box.size.width, height: box.size.height);
-            // ignore: depend_on_referenced_packages
-            CartAnimation.animateAddToCart(context, startRect: startRect, imageUrl: item.imagen);
+            final center = box.localToGlobal(
+              Offset(box.size.width / 2, box.size.height / 2),
+            );
+            final startRect = Rect.fromCenter(
+              center: center,
+              width: box.size.width,
+              height: box.size.height,
+            );
+
+            CartAnimation.animateAddToCart(
+              context,
+              startRect: startRect,
+              imageUrl: item.imagen,
+            );
           }
         }
       } catch (_) {}
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo agregar. Revisa CartService.')),
+        const SnackBar(
+            content: Text('No se pudo agregar. Revisa CartService.')),
       );
     }
   }
@@ -133,7 +150,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               const Icon(Icons.error_outline, size: 48),
               const SizedBox(height: 12),
-              Text('Ocurrió un error:\n$_error', textAlign: TextAlign.center),
+              Text(
+                'Ocurrió un error:\n$_error',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _loadProducts,
@@ -150,78 +170,101 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ===== Banner =====
-Container(
-  height: 160,
-  decoration: BoxDecoration(
-    borderRadius: BorderRadius.circular(16),
-    gradient: LinearGradient(
-      colors: [
-        Theme.of(context).colorScheme.primary, 
-        Theme.of(context).colorScheme.primary.withOpacity(0.7)
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-  ),
-  child: Padding( // <-- sin const
-    padding: const EdgeInsets.all(16),
-    child: Row( // <-- sin const
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text(
-                'Flores para cada momento',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+          // ==========================
+          //         BANNER
+          // ==========================
+          InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const PromotionsScreen()),
+              );
+            },
+            child: Container(
+              height: 160,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withOpacity(0.7),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
-              SizedBox(height: 8),
-              Text(
-                '¡Pide tu arreglo ya!',
-                style: TextStyle(color: Colors.white70),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Flores para cada momento',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '¡Pide tu arreglo ya!',
+                            style: TextStyle(
+                                color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.all(
+                              Radius.circular(12)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.all(
+                              Radius.circular(12)),
+                          child: Image.asset(
+                            'assets/images/estatusLogoOff.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-SizedBox(
-  width: 96,
-  height: 96,
-  child: DecoratedBox(
-    decoration: const BoxDecoration(
-      color: Colors.white24,
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-    ),
-    child: ClipRRect(
-      borderRadius: const BorderRadius.all(Radius.circular(12)),
-      child: Image.asset(
-        'assets/images/estatusLogoOff.png',
-        fit: BoxFit.cover, // o BoxFit.contain si quieres mantener proporción exacta
-      ),
-    ),
-  ),
-),
 
-      ],
-    ),
-  ),
-),
           const SizedBox(height: 16),
 
-          // ===== Categorías (demo) =====
+          // ==========================
+          //        CATEGORÍAS
+          // ==========================
           SizedBox(
             height: 96,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _categories.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, __) =>
+                  const SizedBox(width: 12),
               itemBuilder: (context, index) {
                 final c = _categories[index];
                 return GestureDetector(
@@ -240,7 +283,13 @@ SizedBox(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(c['icon'] as IconData, size: 28, color: Theme.of(context).colorScheme.primary),
+                        Icon(
+                          c['icon'] as IconData,
+                          size: 28,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           c['name'] as String,
@@ -253,13 +302,22 @@ SizedBox(
               },
             ),
           ),
+
           const SizedBox(height: 16),
 
-          // ===== Encabezado =====
+          // ==========================
+          //        ENCABEZADO
+          // ==========================
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Productos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Text(
+                'Productos',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700),
+              ),
               TextButton(
                 onPressed: () {
                   _searchCtrl.clear();
@@ -270,14 +328,17 @@ SizedBox(
             ],
           ),
 
-          // ===== Grid de productos =====
+          // ==========================
+          //       GRID DE PRODUCTOS
+          // ==========================
           GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
+            physics:
+                const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
             itemCount: _filtered.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              // 🔧 un poco más alto para evitar overflow
               childAspectRatio: 0.70,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
@@ -285,85 +346,151 @@ SizedBox(
             itemBuilder: (context, index) {
               final p = _filtered[index];
               final disponible = p.stock > 0;
-              final estadoTexto =
-                  disponible ? 'Disp. (${p.stock})' : 'Agotado';
+              final estadoTexto = disponible
+                  ? 'Disp. (${p.stock})'
+                  : 'Agotado';
 
               return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(12),
+                ),
                 child: InkWell(
                   onTap: () => _openDetails(p),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.stretch,
                     children: [
-                      // Imagen
+                      // IMAGEN
                       ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
+                        borderRadius:
+                            const BorderRadius.only(
+                          topLeft:
+                              Radius.circular(12),
+                          topRight:
+                              Radius.circular(12),
                         ),
                         child: AspectRatio(
                           aspectRatio: 1.4,
                           child: Image.network(
                             p.imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder:
+                                (_, __, ___) =>
+                                    Container(
                               color: Colors.grey[300],
-                              child: const Icon(Icons.image, size: 48, color: Colors.grey),
+                              child: const Icon(
+                                Icons.image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
                             ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
+                            loadingBuilder: (context,
+                                child, progress) {
+                              if (progress == null)
+                                return child;
                               return Container(
                                 color: Colors.grey[200],
-                                child: const Center(child: CircularProgressIndicator()),
+                                child: const Center(
+                                  child:
+                                      CircularProgressIndicator(),
+                                ),
                               );
                             },
                           ),
                         ),
                       ),
-                      // Info
+
+                      // INFO
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                          padding:
+                              const EdgeInsets.all(8),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            mainAxisAlignment:
+                                MainAxisAlignment
+                                    .spaceBetween,
                             children: [
                               Text(
                                 p.categoria,
-                                style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      Colors.grey[600],
+                                  fontWeight:
+                                      FontWeight.w500,
+                                ),
                               ),
                               Text(
                                 p.nombre,
                                 maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                overflow: TextOverflow
+                                    .ellipsis,
+                                style: const TextStyle(
+                                  fontWeight:
+                                      FontWeight.w600,
+                                ),
                               ),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment
+                                        .spaceBetween,
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment
+                                            .start,
                                     children: [
                                       Text(
                                         '\$${p.precio.toStringAsFixed(2)}',
-                                        style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+                                        style: TextStyle(
+                                          fontWeight:
+                                              FontWeight
+                                                  .bold,
+                                          color: Theme.of(
+                                                  context)
+                                              .colorScheme
+                                              .primary,
+                                        ),
                                       ),
                                       Text(
                                         estadoTexto,
-                                        style: TextStyle(
+                                        style:
+                                            TextStyle(
                                           fontSize: 11,
-                                          color: disponible ? Colors.green : Colors.red,
-                                          fontWeight: FontWeight.w600,
+                                          color: disponible
+                                              ? Colors
+                                                  .green
+                                              : Colors
+                                                  .red,
+                                          fontWeight:
+                                              FontWeight
+                                                  .w600,
                                         ),
                                       ),
                                     ],
                                   ),
                                   Builder(
-                                    builder: (tileCtx) => IconButton(
-                                      icon: const Icon(Icons.add_shopping_cart_outlined),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                      onPressed: disponible ? () => _addToCart(p, tileCtx) : null,
+                                    builder: (tileCtx) =>
+                                        IconButton(
+                                      icon: const Icon(Icons
+                                          .add_shopping_cart_outlined),
+                                      padding:
+                                          EdgeInsets.zero,
+                                      constraints:
+                                          const BoxConstraints
+                                              .tightFor(
+                                              width: 36,
+                                              height:
+                                                  36),
+                                      onPressed: disponible
+                                          ? () =>
+                                              _addToCart(
+                                                  p,
+                                                  tileCtx)
+                                          : null,
                                     ),
                                   ),
                                 ],
@@ -378,6 +505,7 @@ SizedBox(
               );
             },
           ),
+
           const SizedBox(height: 80),
         ],
       ),
