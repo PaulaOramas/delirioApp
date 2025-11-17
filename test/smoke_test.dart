@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:delirio_app/main.dart';
 
 void main() {
-	testWidgets('Prueba de humo - la app inicia y muestra navegación', (WidgetTester tester) async {
+	testWidgets('Integración + humo - navegar al perfil', (WidgetTester tester) async {
 		// Ejecuta el widget de la aplicación directamente
 		await tester.pumpWidget(const DeLirioApp());
 
