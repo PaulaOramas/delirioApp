@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
-
 import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/services/cart_service.dart';
@@ -357,7 +356,21 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
               if (_items.isEmpty)
                 const _EmptyItems()
               else
-                ..._items.map((it) => _ItemTile(item: it, onTap: () {})).toList(),
+                ValueListenableBuilder<List<CartItem>>(
+  valueListenable: _cart.items,
+  builder: (context, items, _) {
+    if (items.isEmpty) {
+      return const _EmptyItems();
+    }
+
+    return Column(
+      children: items.map((it) {
+        return _ItemTile(item: it, onTap: () {});
+      }).toList(),
+    );
+  },
+),
+
               const SizedBox(height: 12),
 
               // ===== NUEVO: Selección de fecha y hora de retiro =====
@@ -663,6 +676,7 @@ class _ItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final img = (item.imagen ?? '').trim();
+    final cart = CartService();
 
     return Card(
       elevation: 0,
@@ -673,57 +687,125 @@ class _ItemTile extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: (img.isEmpty)
-                      ? Container(
-                          color: theme.colorScheme.surfaceVariant,
-                          child: const Icon(Icons.local_florist, size: 28),
-                        )
-                      : Image.network(
-                          img,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: theme.colorScheme.surfaceVariant,
-                            child: const Icon(Icons.local_florist, size: 28),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: (img.isEmpty)
+                          ? Container(
+                              color: theme.colorScheme.surfaceVariant,
+                              child: const Icon(Icons.local_florist, size: 28),
+                            )
+                          : Image.network(
+                              img,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: theme.colorScheme.surfaceVariant,
+                                child: const Icon(Icons.local_florist, size: 28),
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.nombre,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.categoria,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '\$${item.precio.toStringAsFixed(2)}  ×  ${item.qty}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: kFucsia,
                           ),
                         ),
-                ),
-              ),
-              const SizedBox(width: 12), // ← antes estaba height: 12
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.nombre,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      item.categoria,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // ============================
+              //  BOTÓN DE DEDICATORIA
+              // ============================
+              TextButton.icon(
+                onPressed: () async {
+                  final controller = TextEditingController(text: item.dedicatoria ?? "");
+
+                  await showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text("Dedicatoria"),
+                      content: TextField(
+                        controller: controller,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          hintText: "Escribe tu mensaje…",
+                          border: OutlineInputBorder(),
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("Cancelar"),
+                        ),
+                        FilledButton(
+                          onPressed: () {
+                            cart.updateDedicatoria(item.id, controller.text.trim());
+                            Navigator.pop(ctx);
+                          },
+                          child: const Text("Guardar"),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '\$${item.precio.toStringAsFixed(2)}  ×  ${item.qty}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: kFucsia),
-                    ),
-                  ],
+                  );
+                },
+                icon: const Icon(Icons.edit_note, color: kFucsia),
+                label: Text(
+                  (item.dedicatoria == null || item.dedicatoria!.isEmpty)
+                      ? "Agregar dedicatoria"
+                      : "Editar dedicatoria",
+                  style: const TextStyle(color: kFucsia),
                 ),
               ),
+
+              if (item.dedicatoria != null && item.dedicatoria!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    "✨ ${item.dedicatoria!}",
+                    style: const TextStyle(
+                      color: kFucsia,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -731,6 +813,7 @@ class _ItemTile extends StatelessWidget {
     );
   }
 }
+
 
 
 class _EmptyItems extends StatelessWidget {

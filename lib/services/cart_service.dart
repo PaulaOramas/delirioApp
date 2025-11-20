@@ -10,7 +10,7 @@ class CartItem {
   final String? imagen;
   int qty;
 
-  String? dedicatoria; // Mantener dedicatoria
+  String? dedicatoria;
 
   CartItem({
     required this.id,
@@ -22,7 +22,6 @@ class CartItem {
     this.dedicatoria,
   });
 
-  // Convertir a JSON para guardarlo localmente
   Map<String, dynamic> toJson() => {
         'id': id,
         'nombre': nombre,
@@ -33,7 +32,6 @@ class CartItem {
         'dedicatoria': dedicatoria,
       };
 
-  // Reconstrucción desde JSON
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
       id: json['id'],
@@ -60,10 +58,8 @@ class CartService {
 
   Future<void> _saveToLocal() async {
     final prefs = await SharedPreferences.getInstance();
-
-    final list = items.value.map((item) => item.toJson()).toList();
-
-    await prefs.setString('cart_data', jsonEncode(list));
+    final data = items.value.map((e) => e.toJson()).toList();
+    await prefs.setString('cart_data', jsonEncode(data));
   }
 
   Future<void> loadFromLocal() async {
@@ -73,10 +69,7 @@ class CartService {
     if (raw == null) return;
 
     final List decoded = jsonDecode(raw);
-
-    final restored = decoded.map((e) => CartItem.fromJson(e)).toList();
-
-    items.value = restored;
+    items.value = decoded.map((e) => CartItem.fromJson(e)).toList();
   }
 
   // ======================
@@ -117,12 +110,19 @@ class CartService {
     _saveToLocal();
   }
 
+  // ==============================
+  //     🔥 DEDICATORIA FIJA Y OK
+  // ==============================
+
   void updateDedicatoria(int id, String? nueva) {
     final idx = items.value.indexWhere((i) => i.id == id);
     if (idx < 0) return;
 
     items.value[idx].dedicatoria = nueva;
-    items.notifyListeners();
+
+    // 🔥 Esto fuerza a refrescar toda la UI
+    items.value = List.from(items.value);
+
     _saveToLocal();
   }
 

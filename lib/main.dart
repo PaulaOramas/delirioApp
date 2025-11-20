@@ -3,6 +3,7 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/navigation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:delirio_app/services/auth_service.dart';
+import 'package:delirio_app/services/cart_service.dart';
 
 // 🧭 Importa el menú personalizado
 import 'package:delirio_app/widgets/custom_navbar.dart';
