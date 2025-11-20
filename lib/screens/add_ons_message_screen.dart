@@ -16,9 +16,6 @@ class AddOnsAndMessageScreen extends StatefulWidget {
 class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
   final cart = CartService();
 
-  bool addProduct1 = false;
-  bool addProduct2 = false;
-
   Product? product1;
   Product? product2;
 
@@ -32,8 +29,8 @@ class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
 
   Future<void> _loadSuggestedProducts() async {
     try {
-      product1 = await ProductService.getById(1);
-      product2 = await ProductService.getById(2);
+      product1 = await ProductService.getById(2);
+      product2 = await ProductService.getById(3);
     } catch (e) {
       debugPrint("Error fetching suggested products: $e");
     }
@@ -41,37 +38,28 @@ class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
     setState(() => loading = false);
   }
 
-  void _addSelectedProducts() {
-    if (addProduct1 && product1 != null) {
-      cart.addItem(
-        CartItem(
-          id: product1!.id,
-          nombre: product1!.nombre,
-          categoria: product1!.categoria,
-          precio: product1!.precio,
-          imagen: product1!.imageUrl, // <--- USAR EL GETTER CORRECTO
-          qty: 1,
-        ),
-      );
-    }
+  void _addToCart(Product p) {
+    cart.addItem(
+      CartItem(
+        id: p.id,
+        nombre: p.nombre,
+        categoria: p.categoria,
+        precio: p.precio,
+        imagen: p.imageUrl,
+        qty: 1,
+      ),
+    );
 
-    if (addProduct2 && product2 != null) {
-      cart.addItem(
-        CartItem(
-          id: product2!.id,
-          nombre: product2!.nombre,
-          categoria: product2!.categoria,
-          precio: product2!.precio,
-          imagen: product2!.imageUrl,
-          qty: 1,
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("${p.nombre} añadido al carrito")),
+    );
+  }
 
+  void _continue() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => OrderConfirmationScreen(),
+        builder: (_) => const OrderConfirmationScreen(),
       ),
     );
   }
@@ -82,7 +70,7 @@ class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Productos sugeridos"),
+        title: const Text("Añade algo especial 💕"),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -91,28 +79,27 @@ class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
               child: Column(
                 children: [
                   if (product1 != null)
-                    _SuggestedProduct(
+                    _AddOnCard(
                       product: product1!,
-                      value: addProduct1,
-                      onChanged: (v) => setState(() => addProduct1 = v),
+                      onAdd: () => _addToCart(product1!),
                     ),
 
                   const SizedBox(height: 12),
 
                   if (product2 != null)
-                    _SuggestedProduct(
+                    _AddOnCard(
                       product: product2!,
-                      value: addProduct2,
-                      onChanged: (v) => setState(() => addProduct2 = v),
+                      onAdd: () => _addToCart(product2!),
                     ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 24),
 
+                  // BOTÓN FINALIZAR
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _addSelectedProducts,
-                      child: const Text("Añadir al carrito"),
+                      onPressed: _continue,
+                      child: const Text("Finalizar pedido"),
                     ),
                   ),
                 ],
@@ -122,16 +109,14 @@ class _AddOnsAndMessageScreenState extends State<AddOnsAndMessageScreen> {
   }
 }
 
-class _SuggestedProduct extends StatelessWidget {
+class _AddOnCard extends StatelessWidget {
   final Product product;
-  final bool value;
-  final ValueChanged<bool> onChanged;
+  final VoidCallback onAdd;
 
-  const _SuggestedProduct({
-    required this.product,
-    required this.value,
-    required this.onChanged,
+  const _AddOnCard({
     super.key,
+    required this.product,
+    required this.onAdd,
   });
 
   @override
@@ -139,6 +124,7 @@ class _SuggestedProduct extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -147,36 +133,52 @@ class _SuggestedProduct extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.network(
-                product.imageUrl, // <--- CORRECTO
+                product.imageUrl,
                 width: 72,
                 height: 72,
                 fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                product.nombre, // <--- CORRECTO
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Column(
-              children: [
-                Text(
-                  "\$${product.precio}", // <--- CORRECTO
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: kFucsia,
-                  ),
+                errorBuilder: (_, __, ___) => Container(
+                  width: 72,
+                  height: 72,
+                  color: theme.colorScheme.surfaceVariant,
+                  child: const Icon(Icons.local_florist, size: 28, color: kFucsia),
                 ),
-                const SizedBox(height: 6),
-                Switch(
-                  value: value,
-                  onChanged: onChanged,
-                )
-              ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.nombre,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    product.categoria,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    "\$${product.precio.toStringAsFixed(2)}",
+                    style: const TextStyle(
+                      color: kFucsia,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            FilledButton(
+              onPressed: onAdd,
+              child: const Text("Añadir"),
             ),
           ],
         ),
