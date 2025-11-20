@@ -8,7 +8,9 @@ class CartItem {
   final String? imagen;
   int qty;
 
-  CartItem({required this.id, required this.nombre, required this.categoria, required this.precio, this.imagen, this.qty = 1});
+ String? dedicatoria; // <-- NUEVO
+
+  CartItem({required this.id, required this.nombre, required this.categoria, required this.precio, this.imagen, this.qty = 1, this.dedicatoria});
 }
 
 class CartService {

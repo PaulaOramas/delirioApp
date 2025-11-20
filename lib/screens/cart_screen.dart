@@ -6,6 +6,7 @@ import 'package:delirio_app/services/auth_service.dart';
 import 'package:delirio_app/screens/login_screen.dart';
 import 'package:delirio_app/services/product_service.dart';
 import 'package:delirio_app/navigation.dart';
+import 'package:delirio_app/screens/add_ons_message_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -184,7 +185,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const OrderConfirmationScreen()),
+      MaterialPageRoute(builder: (_) => AddOnsAndMessageScreen()),
     );
   }
 
@@ -414,6 +415,66 @@ class _CartTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
+                    // --- Botón de dedicatoria ---
+TextButton.icon(
+  onPressed: () async {
+    final controller = TextEditingController(text: item.dedicatoria ?? "");
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Agregar dedicatoria"),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: "Escribe tu mensaje...",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancelar"),
+          ),
+          FilledButton(
+            onPressed: () {
+              item.dedicatoria = controller.text.trim();
+              Navigator.pop(ctx);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
+      ),
+    );
+
+    // refresca el UI
+    (context as Element).markNeedsBuild();
+  },
+  icon: const Icon(Icons.edit_note, color: kFucsia),
+  label: Text(
+    item.dedicatoria == null || item.dedicatoria!.isEmpty
+        ? "Agregar dedicatoria"
+        : "Editar dedicatoria",
+    style: const TextStyle(color: kFucsia),
+  ),
+),
+
+// Mostrar dedicatoria si existe
+if (item.dedicatoria != null && item.dedicatoria!.isNotEmpty)
+  Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Text(
+      "✨ ${item.dedicatoria!}",
+      style: TextStyle(
+        color: theme.colorScheme.primary,
+        fontStyle: FontStyle.italic,
+      ),
+    ),
+  ),
+
+const SizedBox(height: 8),
+
                     Row(
                       children: [
                         _QtyButton(icon: Icons.remove, onTap: onDec),
