@@ -93,14 +93,37 @@ class _CartScreenState extends State<CartScreen> {
 
   void _decQty(CartItem it) {
     if (it.qty == 1) {
-      _remove(it);
+      return; // 🔒 DESHABILITADO EN UI
     } else {
       setState(() => it.qty = (it.qty - 1).clamp(1, 99));
       cart.items.notifyListeners();
     }
   }
 
-  void _remove(CartItem it) => cart.removeItem(it.id);
+  void _remove(CartItem it) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Eliminar producto"),
+        content: Text("¿Seguro que deseas quitar \"${it.nombre}\" del carrito?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancelar"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Eliminar"),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      cart.removeItem(it.id);
+    }
+  }
+
   void _clearCart() => cart.clear();
 
   Future<bool> _ensureLoggedIn() async {
@@ -270,30 +293,13 @@ class _CartScreenState extends State<CartScreen> {
 
                             return Dismissible(
                               key: ValueKey('${it.id}-$i'),
-                              direction: _saving
-                                  ? DismissDirection.none
-                                  : DismissDirection.endToStart,
-                              onDismissed: (_) => _remove(it),
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .errorContainer,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Icon(Icons.delete,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onErrorContainer),
-                              ),
+                              direction: DismissDirection.none,
                               child: _CartTile(
                                 item: it,
                                 stock: max,
                                 reachedMax: reachedMax,
-                                onDec: _saving ? null : () => _decQty(it),
+                                onDec:
+                                    it.qty == 1 ? null : () => _decQty(it),
                                 onInc: _saving ? null : () => _incQty(it),
                                 onRemove:
                                     _saving ? null : () => _remove(it),
@@ -339,28 +345,25 @@ class _CartTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    try {
-      final theme = Theme.of(context);
-      final img = (item.imagen ?? '').trim();
-      final noStock = stock <= 0;
+    final theme = Theme.of(context);
+    final img = (item.imagen ?? '').trim();
+    final noStock = stock <= 0;
 
-      // ⭐ Nueva validación: deshabilitar el botón de "menos" cuando qty = 1
-      final disableMinus = item.qty <= 1;
-
-      return Card(
-        elevation: 0,
-        color: theme.colorScheme.surfaceContainerHighest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // IMAGE
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 72,
-                  height: 72,
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 72,
+                height: 72,
+                child: AspectRatio(
+                  aspectRatio: 1,
                   child: img.isEmpty
                       ? Container(
                           color: theme.colorScheme.surfaceVariant,
@@ -371,138 +374,148 @@ class _CartTile extends StatelessWidget {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             color: theme.colorScheme.surfaceVariant,
-                            child: const Icon(Icons.local_florist, size: 28),
-                          ),
-                        ),
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              // INFO
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.nombre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-
-                    const SizedBox(height: 2),
-
-                    Text(
-                      item.categoria,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    Text(
-                      noStock ? 'Sin stock' : 'Quedan $stock',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: noStock
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      '\$${item.precio.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: kFucsia,
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // CANTIDAD + ELIMINAR
-                    Row(
-                      children: [
-                        // -----------------------------------------
-                        //  BOTÓN MENOS (deshabilitado si qty == 1)
-                        // -----------------------------------------
-                        AbsorbPointer(
-                          absorbing: disableMinus,
-                          child: Opacity(
-                            opacity: disableMinus ? 0.35 : 1,
-                            child: _QtyButton(icon: Icons.remove, onTap: onDec),
-                          ),
-                        ),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text('${item.qty}',
-                              style: theme.textTheme.titleMedium),
-                        ),
-
-                        AbsorbPointer(
-                          absorbing: reachedMax || noStock,
-                          child: Opacity(
-                            opacity: (reachedMax || noStock) ? 0.35 : 1,
                             child:
-                                _QtyButton(icon: Icons.add, onTap: onInc),
+                                const Icon(Icons.local_florist, size: 28),
                           ),
                         ),
-
-                        const Spacer(),
-
-                        // -----------------------------------------
-                        //  BASURERO + CONFIRMACIÓN
-                        // -----------------------------------------
-                        IconButton(
-                          tooltip: 'Eliminar',
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text("Eliminar producto"),
-                                content: Text(
-                                    "¿Deseas eliminar '${item.nombre}' del carrito?"),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(ctx, false),
-                                    child: const Text("Cancelar"),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(ctx, true),
-                                    child: const Text("Eliminar"),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (confirm == true && onRemove != null) {
-                              onRemove!();
-                            }
-                          },
-                          icon: const Icon(Icons.delete_outline),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.categoria,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    noStock ? 'Sin stock' : 'Quedan $stock',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: noStock
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '\$${item.precio.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: kFucsia,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // ⭐ AGREGAR / EDITAR DEDICATORIA
+                  TextButton.icon(
+                    onPressed: () async {
+                      final controller =
+                          TextEditingController(text: item.dedicatoria ?? "");
+
+                      await showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("Dedicatoria"),
+                          content: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              hintText: "Escribe tu mensaje...",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("Cancelar"),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                item.dedicatoria =
+                                    controller.text.trim();
+                                Navigator.pop(ctx);
+                                (context as Element).markNeedsBuild();
+                              },
+                              child: const Text("Guardar"),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_note, color: kFucsia),
+                    label: Text(
+                      (item.dedicatoria == null ||
+                              item.dedicatoria!.isEmpty)
+                          ? "Agregar dedicatoria"
+                          : "Editar dedicatoria",
+                      style: const TextStyle(color: kFucsia),
+                    ),
+                  ),
+
+                  // Mostrar dedicatoria
+                  if (item.dedicatoria != null &&
+                      item.dedicatoria!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        "✨ ${item.dedicatoria!}",
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      _QtyButton(icon: Icons.remove, onTap: onDec),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text('${item.qty}',
+                            style: theme.textTheme.titleMedium),
+                      ),
+                      AbsorbPointer(
+                        absorbing: reachedMax || noStock,
+                        child: Opacity(
+                          opacity: (reachedMax || noStock) ? 0.4 : 1,
+                          child: _QtyButton(icon: Icons.add, onTap: onInc),
+                        ),
+                      ),
+                      const Spacer(),
+
+                      // BOTÓN BASURA CON CONFIRMACIÓN
+                      IconButton(
+                        tooltip: 'Eliminar',
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.delete_outline),
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
-      return const SizedBox.shrink();
-    }
+      ),
+    );
   }
 }
-
 
 class _QtyButton extends StatelessWidget {
   final IconData icon;
@@ -552,8 +565,8 @@ class _EmptyState extends StatelessWidget {
             child: Card(
               elevation: 0,
               color: theme.colorScheme.surfaceContainerHighest,
-              shape:
-                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
                 child: Column(
@@ -574,14 +587,16 @@ class _EmptyState extends StatelessWidget {
                         ),
                       ),
                       child: const Center(
-                        child: Icon(Icons.shopping_bag_outlined, size: 44, color: kFucsia),
+                        child: Icon(Icons.shopping_bag_outlined,
+                            size: 44, color: kFucsia),
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'Tu carrito está vacío',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -597,8 +612,12 @@ class _EmptyState extends StatelessWidget {
                       spacing: 10,
                       runSpacing: 8,
                       children: const [
-                        _BenefitPill(icon: Icons.local_florist, label: 'Arreglos frescos'),
-                        _BenefitPill(icon: Icons.favorite_border, label: 'Regalos únicos'),
+                        _BenefitPill(
+                            icon: Icons.local_florist,
+                            label: 'Arreglos frescos'),
+                        _BenefitPill(
+                            icon: Icons.favorite_border,
+                            label: 'Regalos únicos'),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -608,11 +627,12 @@ class _EmptyState extends StatelessWidget {
                         icon: const Icon(Icons.home_outlined),
                         label: const Text('Ir al inicio'),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: () {
-                          // Cambiar a la pantalla del Dashboard (index 0)
                           bottomNavIndex.value = 0;
                         },
                       ),
@@ -690,15 +710,19 @@ class _SummaryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text('Subtotal', style: theme.textTheme.bodyMedium)),
-                Text('\$${subtotal.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
+                Expanded(
+                    child: Text('Subtotal',
+                        style: theme.textTheme.bodyMedium)),
+                Text('\$${subtotal.toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(child: Text('IVA', style: theme.textTheme.bodyMedium)),
-                Text('\$${iva.toStringAsFixed(2)}', style: theme.textTheme.bodyMedium),
+                Text('\$${iva.toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium),
               ],
             ),
             const Divider(height: 16),
@@ -707,11 +731,13 @@ class _SummaryCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Total',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
                 Text('\$${total.toStringAsFixed(2)}',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 10),
@@ -720,7 +746,10 @@ class _SummaryCard extends StatelessWidget {
               child: FilledButton(
                 onPressed: (isLoading) ? null : onCheckout,
                 child: isLoading
-                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Confirmar pedido'),
               ),
             ),

@@ -16,6 +16,8 @@ import 'package:delirio_app/screens/profile_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService.instance.init(); // 🔐 Inicializar autenticación persistente
+  final cart = CartService();
+  await cart.loadFromLocal();
   runApp(const DeLirioApp());
 }
 
