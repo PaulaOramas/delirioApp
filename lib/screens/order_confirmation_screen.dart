@@ -598,6 +598,68 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                       : 'Confirmar pedido — \$${_montoAPagar.toStringAsFixed(2)}'),
                 ),
               ),
+
+              const SizedBox(height: 12),
+
+              //botón para cancelar
+              SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: Icon(
+                      Icons.cancel_outlined,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    label: Text(
+                      'Cancelar pedido',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.error,
+                        width: 1.4,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('¿Cancelar pedido?'),
+                          content: const Text(
+                            'Esto eliminará todos los productos del carrito. ¿Deseas continuar?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('No'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Sí, cancelar'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm == true) {
+                        _cart.clear();
+                        if (context.mounted) {
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Pedido cancelado')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ),
+
               const SizedBox(height: 8),
               Text(
                 'Al confirmar aceptas los Términos y la Política de privacidad.',
