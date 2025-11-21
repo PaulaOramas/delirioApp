@@ -2,6 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 
+import 'package:delirio_app/services/pedido_api.dart';
+import 'package:delirio_app/models/pedido.dart';  // donde guardaste el modelo
+import 'package:delirio_app/services/auth_service.dart';
+
 /// ===== Modelo y utilidades (solo para UI quemada) =====
 
 enum OrderStatus { pendiente, aceptado, rechazado }
@@ -94,47 +98,41 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _loadMock();
+    _future = _loadOrders();
+
   }
 
-  Future<List<OrderSummary>> _loadMock() async {
-    await Future.delayed(const Duration(milliseconds: 600)); // shimmer simple
-    final now = DateTime.now();
+Future<List<OrderSummary>> _loadOrders() async {
+  await Future.delayed(const Duration(milliseconds: 300)); // pequeño shimmer
 
-    // Datos QUEMADOS (ajusta a gusto)
-    return [
-      OrderSummary(
-        createdAt: now.subtract(const Duration(minutes: 35)),
-        pickupAt: _withTime(now, hour: 12, minute: 0),
-        status: OrderStatus.pendiente,
-        total: 26.98,
-      ),
-      OrderSummary(
-        createdAt: now.subtract(const Duration(days: 2, hours: 3)),
-        pickupAt: _withTime(now.subtract(const Duration(days: 1)), hour: 10, minute: 30),
-        status: OrderStatus.aceptado,
-        total: 42.15,
-      ),
-      OrderSummary(
-        createdAt: now.subtract(const Duration(days: 4, hours: 5)),
-        pickupAt: _withTime(now.subtract(const Duration(days: 3)), hour: 18, minute: 0),
-        status: OrderStatus.rechazado,
-        total: 18.50,
-      ),
-      OrderSummary(
-        createdAt: now.subtract(const Duration(days: 8, hours: 2)),
-        pickupAt: _withTime(now.subtract(const Duration(days: 7)), hour: 11, minute: 0),
-        status: OrderStatus.aceptado,
-        total: 55.40,
-      ),
-    ];
+  // Obtener userId del token
+  final claims = AuthService.instance.claims;
+  final userId = int.tryParse(claims?["id"]?.toString() ?? "") ?? 0;
+
+  if (userId == 0) {
+    throw Exception("Usuario no autenticado");
   }
+
+  // Obtener pedidos desde la API
+  final pedidos = await PedidoApi.obtenerPedidosPorUsuario(userId);
+
+  // Mapear Pedido → OrderSummary para usar TU UI sin tocar el diseño
+  return pedidos.map((p) {
+    return OrderSummary(
+      createdAt: p.fecha,
+      pickupAt: null, // si luego agregas fecha de retiro, aquí se coloca
+      status: _mapEstado(p.estado),
+      total: p.total,
+    );
+  }).toList();
+}
+
 
   Future<void> _refresh() async {
     if (_refreshing) return;
     setState(() {
       _refreshing = true;
-      _future = _loadMock();
+      _future = _loadOrders();
     });
     await _future;
     if (!mounted) return;
@@ -423,3 +421,18 @@ String _formatTime(DateTime dt) => '${_two(dt.hour)}:${_two(dt.minute)}';
 
 DateTime _withTime(DateTime base, {required int hour, required int minute}) =>
     DateTime(base.year, base.month, base.day, hour, minute);
+
+OrderStatus _mapEstado(String estado) {
+  switch (estado.toUpperCase()) {
+    case "ACP":
+    case "ACEPTADO":
+      return OrderStatus.aceptado;
+
+    case "RCZ":
+    case "RECHAZADO":
+      return OrderStatus.rechazado;
+
+    default:
+      return OrderStatus.pendiente;
+  }
+}
