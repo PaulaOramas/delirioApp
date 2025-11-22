@@ -6,8 +6,9 @@ class ClientePerfil {
   final String correo;
   final String telefono;
   final String usuario;
-  final String? foto;
   final String? direccion;
+  final String? avatar;
+
 
   ClientePerfil({
     required this.nombre,
@@ -16,23 +17,12 @@ class ClientePerfil {
     required this.correo,
     required this.telefono,
     required this.usuario,
-    this.foto,
     this.direccion,
+    this.avatar,
   });
 
   String get nombreCompleto => '$nombre $apellido'.trim();
 
-  /// Mapea exactamente el JSON que compartiste:
-  /// {
-  ///   "Nombre": "Paula",
-  ///   "Apellido": "O",
-  ///   "Cedula": "17517",
-  ///   "Correo": "paula@gmail.com",
-  ///   "Telefono": "09881",
-  ///   "Usuario": "pau",
-  ///   "Foto": "...",          // opcional
-  ///   "Direccion": "..."      // opcional
-  /// }
   factory ClientePerfil.fromJson(Map<String, dynamic> json) {
     return ClientePerfil(
       nombre:   (json['Nombre'] ?? '').toString(),
@@ -41,8 +31,8 @@ class ClientePerfil {
       correo:   (json['Correo'] ?? '').toString(),
       telefono: (json['Telefono'] ?? '').toString(),
       usuario:  (json['Usuario'] ?? '').toString(),
-      foto:     json['Foto']?.toString(),
       direccion:json['Direccion']?.toString(),
+      avatar:   json['Avatar']?.toString(),
     );
   }
 
@@ -53,7 +43,7 @@ class ClientePerfil {
     'Correo': correo,
     'Telefono': telefono,
     'Usuario': usuario,
-    if (foto != null) 'Foto': foto,
     if (direccion != null) 'Direccion': direccion,
+    if (avatar != null) 'Avatar': avatar,
   };
 }

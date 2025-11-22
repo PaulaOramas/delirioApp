@@ -286,7 +286,7 @@ void _goBackToDashboard() {
                                           : () {
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
-                                                  builder: (_) => const RegisterFormScreen(role: UserRole.usuario),
+                                                  builder: (_) => RegisterFormScreen(role: UserRole.usuario),
                                                 ),
                                               );
                                             },

@@ -15,6 +15,7 @@ import 'package:delirio_app/models/cliente_perfil.dart';
 // Navigation helper (global bottomNavIndex)
 import 'package:delirio_app/navigation.dart';
 import 'package:delirio_app/screens/edit_profile_screen.dart';
+import 'package:delirio_app/screens/profile_view_screen.dart';
 
 // NOTA: themeController debe exportarse desde lib/theme.dart
 
@@ -40,7 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         (claims?['nombre'] ?? claims?['Nombre'] ?? 'Nombre de usuario').toString();
     final emailFromClaims =
         (claims?['email'] ?? claims?['Correo'] ?? 'user@example.com').toString();
-    final photoFromClaims = (claims?['foto'] ?? claims?['Foto'])?.toString();
+    final photoFromClaims = (claims?['avatar'] ?? claims?['Avatar'])?.toString();
 
     final loggedIn = auth.isLoggedIn();
     final bool isGuest = !loggedIn || userId == null;
@@ -74,7 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             name: name,
                             email: email,
                             photoUrl: photo,
-                            onEdit: _onEditTap,
+                            onEdit: (){},
                           ),
                           const SizedBox(height: 8),
                           const LinearProgressIndicator(),
@@ -98,16 +99,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       final p = snapshot.data!;
                       if (p.nombreCompleto.isNotEmpty) name = p.nombreCompleto;
                       if (p.correo.isNotEmpty) email = p.correo;
-                      if ((p.foto ?? '').toString().isNotEmpty) photo = p.foto;
+                      if ((p.avatar ?? '').toString().isNotEmpty) photo = p.avatar;
+
+                      return _ProfileHeader(
+                        name: name,
+                        email: email,
+                        photoUrl: photo,
+                        onEdit: () => _onEditTap(p),
+                      );
                     }
 
-                    return _ProfileHeader(
+                      return _ProfileHeader(
                       name: name,
                       email: email,
                       photoUrl: photo,
-                      onEdit: _onEditTap,
+                      onEdit: () {},
                     );
-                  },
+                  }
                 )
               else
                 // ===== Empty state para invitados =====
@@ -307,14 +315,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _onEditTap() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const EditProfileMockScreen()))
-        .then((updated) {
-      // Si el editor devolvió true, refrescamos la pantalla para recargar datos
-      if (updated == true && mounted) setState(() {});
-    });
-  }
+void _onEditTap(ClientePerfil perfil) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ProfileViewScreen(perfil: perfil),
+    ),
+  );
+}
+
+
 
   int? _extractUserId(Map<String, dynamic>? claims) {
     if (claims == null) return null;

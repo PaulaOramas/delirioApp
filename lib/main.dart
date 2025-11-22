@@ -16,9 +16,22 @@ import 'package:delirio_app/screens/profile_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AuthService.instance.init(); // 🔐 Inicializar autenticación persistente
+  // Inicializar autenticación persistente
+  final auth = AuthService.instance;
+  await auth.init();   // <-- NO FALLA SI NO HAY TOKEN
+
+  // Solo imprime si existe token (opcional)
+  if (auth.token != null) {
+    print("TOKEN CARGADO: ${auth.token}");
+    print("CLAIMS: ${auth.claims}");
+  } else {
+    print("No hay token guardado (sesión invitado).");
+  }
+
+  // Cargar carrito antes de iniciar la app
   final cart = CartService();
   await cart.loadFromLocal();
+
   runApp(const DeLirioApp());
 }
 
