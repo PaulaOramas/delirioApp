@@ -426,6 +426,10 @@ OrderStatus _mapEstado(String estado) {
     case "RECHAZADO":
       return OrderStatus.rechazado;
 
+    case "CAN":
+    case "CANCELADO":
+      return OrderStatus.cancelado;
+
     default:
       return OrderStatus.pendiente;
   }

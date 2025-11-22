@@ -35,7 +35,11 @@ class Pedido {
 
   factory Pedido.fromJson(Map<String, dynamic> json) {
     return Pedido(
-      pedidoId: json["pedidoId"] ?? json["id"] ?? 0,
+      pedidoId: json["pedidoId"]
+        ?? json["id"]
+        ?? ((json["detalles"] != null && json["detalles"].isNotEmpty)
+            ? (json["detalles"][0]["pedId"] ?? 0)
+            : 0),
       userId: json["userId"] ?? 0,
       fecha: DateTime.parse(json["fecha"]),
       subtotal: (json["subtotal"] ?? 0).toDouble(),

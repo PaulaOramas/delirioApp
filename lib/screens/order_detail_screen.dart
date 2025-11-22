@@ -165,7 +165,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             montoAbonado: _pedido.montoAbonado,
             credito: _pedido.credito,
             montoCredito:_pedido.montoCredito,
-            estado: "RCZ",
+            estado: "CAN",
             detalles: _pedido.detalles,
         );
     });

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:delirio_app/theme.dart';
 
-enum OrderStatus { pendiente, aceptado, rechazado }
+enum OrderStatus { pendiente, aceptado, rechazado, cancelado }
 
 OrderStatus mapEstado(String estado) {
   switch (estado.toUpperCase()) {
@@ -12,6 +12,10 @@ OrderStatus mapEstado(String estado) {
     case "RCZ":
     case "RECHAZADO":
       return OrderStatus.rechazado;
+
+    case "CAN":
+    case "CANCELADO":
+      return OrderStatus.cancelado;
 
     default:
       return OrderStatus.pendiente;
@@ -27,6 +31,8 @@ extension OrderStatusX on OrderStatus {
         return 'Aceptado';
       case OrderStatus.rechazado:
         return 'Rechazado';
+      case OrderStatus.cancelado:
+        return 'Cancelado';
     }
   }
 
@@ -37,6 +43,8 @@ extension OrderStatusX on OrderStatus {
       case OrderStatus.aceptado:
         return Icons.check_circle_outline;
       case OrderStatus.rechazado:
+        return Icons.cancel_outlined;
+      case OrderStatus.cancelado:
         return Icons.cancel_outlined;
     }
   }
@@ -50,6 +58,8 @@ extension OrderStatusX on OrderStatus {
         return kVerdeHoja.withOpacity(.18);
       case OrderStatus.rechazado:
         return cs.errorContainer;
+      case OrderStatus.cancelado:
+        return cs.errorContainer;
     }
   }
 
@@ -61,6 +71,8 @@ extension OrderStatusX on OrderStatus {
       case OrderStatus.aceptado:
         return kVerdeHoja;
       case OrderStatus.rechazado:
+        return cs.onErrorContainer;
+      case OrderStatus.cancelado:
         return cs.onErrorContainer;
     }
   }
