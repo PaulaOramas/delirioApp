@@ -5,10 +5,12 @@ import 'package:delirio_app/theme.dart';
 import 'package:delirio_app/services/pedido_api.dart';
 import 'package:delirio_app/models/pedido.dart';  // donde guardaste el modelo
 import 'package:delirio_app/services/auth_service.dart';
+import 'package:delirio_app/screens/order_detail_screen.dart';
+import 'package:delirio_app/models/order_status.dart';
 
 /// ===== Modelo y utilidades (solo para UI quemada) =====
 
-enum OrderStatus { pendiente, aceptado, rechazado }
+
 
 class OrderSummary {
   final DateTime createdAt;
@@ -33,54 +35,54 @@ String _formatOrderCode(DateTime now) {
   return 'EST-${now.year}${_pad2(now.month)}${_pad2(now.day)}-$suffix';
 }
 
-extension OrderStatusX on OrderStatus {
-  String get label {
-    switch (this) {
-      case OrderStatus.pendiente:
-        return 'Pendiente';
-      case OrderStatus.aceptado:
-        return 'Aceptado';
-      case OrderStatus.rechazado:
-        return 'Rechazado';
-    }
-  }
+// extension OrderStatusX on OrderStatus {
+//   String get label {
+//     switch (this) {
+//       case OrderStatus.pendiente:
+//         return 'Pendiente';
+//       case OrderStatus.aceptado:
+//         return 'Aceptado';
+//       case OrderStatus.rechazado:
+//         return 'Rechazado';
+//     }
+//   }
 
-  IconData get icon {
-    switch (this) {
-      case OrderStatus.pendiente:
-        return Icons.schedule_outlined;
-      case OrderStatus.aceptado:
-        return Icons.check_circle_outline;
-      case OrderStatus.rechazado:
-        return Icons.cancel_outlined;
-    }
-  }
+//   IconData get icon {
+//     switch (this) {
+//       case OrderStatus.pendiente:
+//         return Icons.schedule_outlined;
+//       case OrderStatus.aceptado:
+//         return Icons.check_circle_outline;
+//       case OrderStatus.rechazado:
+//         return Icons.cancel_outlined;
+//     }
+//   }
 
-  // Colores del chip por estado
-  Color bg(BuildContext ctx) {
-    final cs = Theme.of(ctx).colorScheme;
-    switch (this) {
-      case OrderStatus.pendiente:
-        return Colors.amber.withOpacity(.25); // amarillo suave
-      case OrderStatus.aceptado:
-        return kVerdeHoja.withOpacity(.18); // verde suave de tu paleta
-      case OrderStatus.rechazado:
-        return cs.errorContainer; // rojo claro del tema
-    }
-  }
+//   // Colores del chip por estado
+//   Color bg(BuildContext ctx) {
+//     final cs = Theme.of(ctx).colorScheme;
+//     switch (this) {
+//       case OrderStatus.pendiente:
+//         return Colors.amber.withOpacity(.25); // amarillo suave
+//       case OrderStatus.aceptado:
+//         return kVerdeHoja.withOpacity(.18); // verde suave de tu paleta
+//       case OrderStatus.rechazado:
+//         return cs.errorContainer; // rojo claro del tema
+//     }
+//   }
 
-  Color fg(BuildContext ctx) {
-    final cs = Theme.of(ctx).colorScheme;
-    switch (this) {
-      case OrderStatus.pendiente:
-        return Colors.amber[900] ?? Colors.brown; // texto amarillo oscuro
-      case OrderStatus.aceptado:
-        return kVerdeHoja; // texto verde
-      case OrderStatus.rechazado:
-        return cs.onErrorContainer; // texto para fondo de error
-    }
-  }
-}
+//   Color fg(BuildContext ctx) {
+//     final cs = Theme.of(ctx).colorScheme;
+//     switch (this) {
+//       case OrderStatus.pendiente:
+//         return Colors.amber[900] ?? Colors.brown; // texto amarillo oscuro
+//       case OrderStatus.aceptado:
+//         return kVerdeHoja; // texto verde
+//       case OrderStatus.rechazado:
+//         return cs.onErrorContainer; // texto para fondo de error
+//     }
+//   }
+// }
 
 /// ===== Pantalla =====
 
@@ -92,7 +94,7 @@ class OrderHistoryScreen extends StatefulWidget {
 }
 
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
-  late Future<List<OrderSummary>> _future;
+  late Future<List<Pedido>> _future;
   bool _refreshing = false;
 
   @override
@@ -102,7 +104,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   }
 
-Future<List<OrderSummary>> _loadOrders() async {
+Future<List<Pedido>> _loadOrders() async {
   await Future.delayed(const Duration(milliseconds: 300)); // pequeño shimmer
 
   // Obtener claims del token
@@ -119,14 +121,7 @@ Future<List<OrderSummary>> _loadOrders() async {
   final pedidos = await PedidoApi.obtenerPedidosPorUsuario(userId);
 
   // Convertir pedidos reales → UI actual (OrderSummary)
-  return pedidos.map((p) {
-    return OrderSummary(
-      createdAt: p.fecha,
-      pickupAt: null, // si quieres añadir luego
-      status: _mapEstado(p.estado),
-      total: p.total,
-    );
-  }).toList();
+  return pedidos;
 }
 
 
@@ -151,7 +146,7 @@ Future<List<OrderSummary>> _loadOrders() async {
         title: const Text('Historial de pedidos'),
         centerTitle: true,
       ),
-      body: FutureBuilder<List<OrderSummary>>(
+      body: FutureBuilder<List<Pedido>>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting && !_hasData(snap)) {
@@ -174,7 +169,7 @@ Future<List<OrderSummary>> _loadOrders() async {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (ctx, i) => _OrderCard(item: items[i]),
+              itemBuilder: (ctx, i) => _OrderCard(pedido: items[i]),
             ),
           );
         },
@@ -191,32 +186,39 @@ Future<List<OrderSummary>> _loadOrders() async {
     );
   }
 
-  bool _hasData(AsyncSnapshot<List<OrderSummary>> snap) =>
+  bool _hasData(AsyncSnapshot<List<Pedido>> snap) =>
       snap.hasData && (snap.data?.isNotEmpty ?? false);
 }
 
 /// ===== Widgets =====
 
 class _OrderCard extends StatelessWidget {
-  final OrderSummary item;
-  const _OrderCard({required this.item});
+  final Pedido pedido;
+
+  const _OrderCard({required this.pedido});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final code = item.orderCode;
-    final date = _formatDate(item.createdAt);
-    final time = _formatTime(item.createdAt);
+
+    final date = _formatDate(pedido.fecha);
+    final time = _formatTime(pedido.fecha);
+    final status = _mapEstado(pedido.estado);
 
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Pedido $code')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(pedido: pedido),
+            ),
           );
         },
         child: Padding(
@@ -235,50 +237,38 @@ class _OrderCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
 
-              // Texto
+              // Información del pedido
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Order code
                     Text(
-                      code,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      "Pedido #${pedido.pedidoId}",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    // Fecha, retiro y total
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '$date • $time'
-                            '${item.pickupAt != null ? ' • Retiro: ${_formatDate(item.pickupAt!)} ${_formatTime(item.pickupAt!)}' : ''}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '\$${item.total.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: kFucsia,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      '$date • $time',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\$${pedido.total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: kFucsia,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(width: 12),
-
-              // Estado (chip)
-              _StatusChip(status: item.status),
+              // Estado
+              _StatusChip(status: status),
             ],
           ),
         ),
@@ -286,6 +276,7 @@ class _OrderCard extends StatelessWidget {
     );
   }
 }
+
 
 class _StatusChip extends StatelessWidget {
   final OrderStatus status;

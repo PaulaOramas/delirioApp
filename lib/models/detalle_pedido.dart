@@ -3,12 +3,16 @@ class DetallePedido {
   final double precio;
   final int cantidad;
   final String mensaje;
+  
+   String? nombreProducto;
+
 
   DetallePedido({
     required this.prdId,
     required this.precio,
     required this.cantidad,
     required this.mensaje,
+    this.nombreProducto,
   });
 
   factory DetallePedido.fromJson(Map<String, dynamic> json) {
@@ -17,6 +21,7 @@ class DetallePedido {
       precio: (json['precio'] ?? 0).toDouble(),
       cantidad: json['cantidad'] ?? 0,
       mensaje: json['mensaje'] ?? "",
+      nombreProducto: json['nombreProducto'],
     );
   }
 
@@ -25,5 +30,6 @@ class DetallePedido {
         'precio': precio,
         'cantidad': cantidad,
         'mensaje': mensaje,
+        'nombreProducto': nombreProducto,
       };
 }
