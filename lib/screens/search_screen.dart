@@ -333,8 +333,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     // 4. Precio y stock siempre
     result = result
-        .where((p) => p.precio <= _priceMax && p.stock > 0)
-        .toList();
+      .where((p) => p.precio <= _priceMax)
+      .toList();
+
 
     setState(() {
       _filtered = result;
@@ -688,26 +689,6 @@ class _Suggestions extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-        _SectionTitle('Tendencias'),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            children: [
-              ..._intersperse(
-                const Divider(height: 1),
-                trending.map((t) => ListTile(
-                      leading: const Icon(Icons.trending_up),
-                      title: Text(t),
-                      onTap: () => onTapItem(t),
-                    )),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -812,15 +793,13 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final img = (product.imagenes.isNotEmpty
-            ? product.imagenes.first
-            : '')
-        .trim();
+    final img = (product.imagenes.isNotEmpty ? product.imagenes.first : '').trim();
+
+    final bool agotado = product.stock <= 0;
 
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: theme.colorScheme.surfaceContainerHighest,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -828,68 +807,116 @@ class _ProductCard extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  ProductScreen(productId: product.id),
+              builder: (_) => ProductScreen(productId: product.id),
             ),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: img.isEmpty
-                      ? Container(
-                          color: theme
-                              .colorScheme.surfaceVariant,
-                          child: const Icon(Icons.local_florist,
-                              size: 28),
-                        )
-                      : Image.network(
-                          img,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              Container(
-                            color: theme
-                                .colorScheme.surfaceVariant,
-                            child: const Icon(
-                                Icons.local_florist, size: 28),
-                          ),
-                        ),
-                ),
+        child: Stack(
+          children: [
+            // ======= CONTENIDO PRINCIPAL =======
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          // Imagen
+                          img.isEmpty
+                              ? Container(
+                                  color: theme.colorScheme.surfaceVariant,
+                                  child: const Icon(
+                                    Icons.local_florist,
+                                    size: 28,
+                                  ),
+                                )
+                              : Image.network(
+                                  img,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: theme.colorScheme.surfaceVariant,
+                                    child: const Icon(Icons.local_florist, size: 28),
+                                  ),
+                                ),
+
+                          // Opacidad si está agotado
+                          if (agotado)
+                            Container(
+                              color: Colors.white.withOpacity(0.55),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Nombre
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      product.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: agotado
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Precio
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '\$${product.precio.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: agotado
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  product.nombre,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '\$${product.precio.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color:
-                        Theme.of(context).colorScheme.primary,
+            ),
+
+            // ======= BADGE "AGOTADO" =======
+            if (agotado)
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    "Agotado",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 }
+
 
 class _InitialLoading extends StatelessWidget {
   const _InitialLoading();
@@ -1299,51 +1326,6 @@ class _FiltersSheetState extends State<_FiltersSheet> {
               ),
               const SizedBox(height: 16),
             ],
-
-            // // Estado
-            // if (estados.isNotEmpty) ...[
-            //   Row(
-            //     children: [
-            //       const Icon(Icons.info_outline),
-            //       const SizedBox(width: 8),
-            //       Expanded(
-            //         child: Column(
-            //           crossAxisAlignment:
-            //               CrossAxisAlignment.start,
-            //           children: [
-            //             const Text('Estado del producto'),
-            //             const SizedBox(height: 8),
-            //             Wrap(
-            //               spacing: 8,
-            //               runSpacing: 8,
-            //               children: estados.map((e) {
-            //                 final selected =
-            //                     _tempSelectedEstados
-            //                         .contains(e);
-            //                 return FilterChip(
-            //                   label: Text(e),
-            //                   selected: selected,
-            //                   onSelected: (sel) {
-            //                     setState(() {
-            //                       if (sel) {
-            //                         _tempSelectedEstados
-            //                             .add(e);
-            //                       } else {
-            //                         _tempSelectedEstados
-            //                             .remove(e);
-            //                       }
-            //                     });
-            //                   },
-            //                 );
-            //               }).toList(),
-            //             ),
-            //           ],
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            //   const SizedBox(height: 16),
-            // ],
 
             // Botones
             Row(
