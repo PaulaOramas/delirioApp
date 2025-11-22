@@ -105,27 +105,30 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 Future<List<OrderSummary>> _loadOrders() async {
   await Future.delayed(const Duration(milliseconds: 300)); // pequeño shimmer
 
-  // Obtener userId del token
+  // Obtener claims del token
   final claims = AuthService.instance.claims;
-  final userId = int.tryParse(claims?["id"]?.toString() ?? "") ?? 0;
+
+  // Ajuste importante → tu token usa "Id"
+  final userId = int.tryParse(claims?["Id"]?.toString() ?? "") ?? 0;
 
   if (userId == 0) {
     throw Exception("Usuario no autenticado");
   }
 
-  // Obtener pedidos desde la API
+  // Llamar a la API real
   final pedidos = await PedidoApi.obtenerPedidosPorUsuario(userId);
 
-  // Mapear Pedido → OrderSummary para usar TU UI sin tocar el diseño
+  // Convertir pedidos reales → UI actual (OrderSummary)
   return pedidos.map((p) {
     return OrderSummary(
       createdAt: p.fecha,
-      pickupAt: null, // si luego agregas fecha de retiro, aquí se coloca
+      pickupAt: null, // si quieres añadir luego
       status: _mapEstado(p.estado),
       total: p.total,
     );
   }).toList();
 }
+
 
 
   Future<void> _refresh() async {
