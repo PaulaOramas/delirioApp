@@ -3,9 +3,12 @@ import 'package:delirio_app/models/pedido.dart';
 import 'package:delirio_app/models/detalle_pedido.dart';
 import 'package:delirio_app/models/order_status.dart';
 import 'package:delirio_app/services/product_service.dart';
+import 'package:delirio_app/services/auth_service.dart';
+import 'package:delirio_app/services/pedido_api.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final Pedido pedido;
+
 
   const OrderDetailScreen({super.key, required this.pedido});
 
@@ -14,14 +17,16 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
+    late Pedido _pedido;   // 👈 AQUÍ SÍ VA
   @override
   void initState() {
     super.initState();
+    _pedido = widget.pedido;
     _loadProductNames();
   }
 
   Future<void> _loadProductNames() async {
-    for (var d in widget.pedido.detalles) {
+    for (var d in _pedido.detalles) {
       if (d.nombreProducto == null) {
         try {
           final prod = await ProductService.getById(d.prdId);
@@ -38,7 +43,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = mapEstado(widget.pedido.estado);
+    final status = mapEstado(_pedido.estado);
 
     return Scaffold(
       appBar: AppBar(
@@ -55,7 +60,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Pedido #${widget.pedido.pedidoId}",
+                    "Pedido #${_pedido.pedidoId}",
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -64,7 +69,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   const SizedBox(height: 6),
 
                   Text(
-                    "${_formatDate(widget.pedido.fecha)} • ${_formatTime(widget.pedido.fecha)}",
+                    "${_formatDate(_pedido.fecha)} • ${_formatTime(_pedido.fecha)}",
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -88,20 +93,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
             const SizedBox(height: 8),
 
-            ...widget.pedido.detalles.map((d) => _ProductTile(detalle: d)),
+            ..._pedido.detalles.map((d) => _ProductTile(detalle: d)),
 
             const SizedBox(height: 20),
 
             _SectionCard(
               child: Column(
                 children: [
-                  _priceRow("Subtotal", widget.pedido.subtotal, theme),
-                  _priceRow("IVA", widget.pedido.iva, theme),
+                  _priceRow("Subtotal", _pedido.subtotal, theme),
+                  _priceRow("IVA", _pedido.iva, theme),
                   const Divider(),
-                  _priceRow("Total", widget.pedido.total, theme, bold: true),
+                  _priceRow("Total", _pedido.total, theme, bold: true),
                 ],
               ),
             ),
+
+            if (status == OrderStatus.pendiente || status == OrderStatus.aceptado) ...[
+                const SizedBox(height: 20),
+                SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: FilledButton(
+                    style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red,
+                    ),
+                    onPressed: _cancelarPedido,
+                    child: const Text("Cancelar pedido", style: TextStyle(color: Colors.white)),
+                    ),
+                ),
+                ],
+
 
             const SizedBox(height: 40),
           ],
@@ -109,6 +130,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       ),
     );
   }
+
+  Future<void> _cancelarPedido() async {
+  final token = AuthService.instance.token; // si tienes token aquí
+  final pedidoId = _pedido.pedidoId;
+
+  if (token == null || token.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Debes iniciar sesión para cancelar")),
+    );
+    return;
+  }
+
+  try {
+    final ok = await PedidoApi.cancelarPedido(pedidoId, token);
+
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pedido cancelado correctamente")),
+      );
+
+      setState(() {
+        _pedido = Pedido(
+            pedidoId: _pedido.pedidoId,
+            userId: _pedido.userId,
+            fecha: _pedido.fecha,
+            subtotal: _pedido.subtotal,
+            iva: _pedido.iva,
+            total: _pedido.total,
+            comprobante: _pedido.comprobante,
+            abonado: _pedido.abonado,
+            montoAbonado: _pedido.montoAbonado,
+            credito: _pedido.credito,
+            montoCredito:_pedido.montoCredito,
+            estado: "RCZ",
+            detalles: _pedido.detalles,
+        );
+    });
+
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error al cancelar: $e")),
+    );
+  }
+}
+
 }
 
 Widget _priceRow(String label, double value, ThemeData theme,

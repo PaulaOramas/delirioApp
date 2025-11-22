@@ -131,4 +131,26 @@ class PedidoApi {
     throw Exception(
         "Error al obtener pedidos del usuario: ${res.statusCode}");
   }
+
+  //cancelar pedido
+  static Future<bool> cancelarPedido(int pedidoId, String token) async {
+    final url = Uri.parse('https://delirio.runasp.net/api/pedido/cancelar/$pedidoId');
+
+    final res = await http.post(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode == 200) {
+      return true;
+    }
+
+    throw Exception("No se pudo cancelar el pedido: ${res.body}");
+  }
+
 }
+
+
