@@ -738,70 +738,130 @@ class _ItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final img = (item.imagen ?? '').trim();
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        onTap: onTap,
-        leading: item.imagen != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  item.imagen!,
-                  width: 48,
-                  height: 48,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.local_florist_outlined),
-                ),
-              )
-            : const Icon(Icons.local_florist_outlined),
-        title: Text(item.nombre),
-        subtitle: Text(
-          "x${item.qty} • \$${item.precio.toStringAsFixed(2)}",
-          style: theme.textTheme.bodySmall,
-        ),
-        trailing: Text(
-          "\$${(item.precio * item.qty).toStringAsFixed(2)}",
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccountInfoCard extends StatelessWidget {
-  final double monto;
-  const _AccountInfoCard({required this.monto});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+        padding: const EdgeInsets.all(12),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Cuenta para transferencia",
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+            // ⭐ IMAGEN CON FALLBACK EXACTO AL DEL CARRITO
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: img.isEmpty
+                      ? Container(
+                          color: theme.colorScheme.surfaceVariant,
+                          child: const Icon(Icons.local_florist_outlined, size: 28),
+                        )
+                      : Image.network(
+                          img,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: theme.colorScheme.surfaceVariant,
+                            child: const Icon(Icons.local_florist_outlined, size: 28),
+                          ),
+                        ),
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text("Banco: Banco de Ejemplo S.A."),
-            Text("Titular: DeLirio Florería"),
-            Text("Cuenta: 1234567890"),
-            Text("Tipo: Cuenta de ahorros"),
-            const SizedBox(height: 12),
+
+            const SizedBox(width: 12),
+
+            // ========= CONTENIDO =========
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.nombre,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+
+                  const SizedBox(height: 4),
+                  Text(
+                    "x${item.qty} • \$${item.precio.toStringAsFixed(2)}",
+                    style: theme.textTheme.bodySmall,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // ⭐ BOTÓN DEDICATORIA
+                  TextButton.icon(
+                    onPressed: () async {
+                      final controller =
+                          TextEditingController(text: item.dedicatoria ?? "");
+
+                      await showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("Dedicatoria"),
+                          content: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              hintText: "Escribe tu mensaje...",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("Cancelar"),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                item.dedicatoria = controller.text.trim();
+                                Navigator.pop(ctx);
+                                (context as Element).markNeedsBuild();
+                              },
+                              child: const Text("Guardar"),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_note, color: kFucsia),
+                    label: Text(
+                      (item.dedicatoria == null || item.dedicatoria!.isEmpty)
+                          ? "Agregar dedicatoria"
+                          : "Editar dedicatoria",
+                      style: const TextStyle(color: kFucsia),
+                    ),
+                  ),
+
+                  // ⭐ MOSTRAR DEDICATORIA
+                  if (item.dedicatoria != null &&
+                      item.dedicatoria!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        "✨ ${item.dedicatoria!}",
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // ========= TOTAL =========
             Text(
-              "Monto a pagar ahora: \$${monto.toStringAsFixed(2)}",
+              "\$${(item.precio * item.qty).toStringAsFixed(2)}",
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: kFucsia,
               ),
             ),
           ],
@@ -810,3 +870,152 @@ class _AccountInfoCard extends StatelessWidget {
     );
   }
 }
+
+
+class _AccountInfoCard extends StatelessWidget {
+  final double monto;
+  const _AccountInfoCard({required this.monto});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ENCABEZADO CON ÍCONO
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: kFucsia.withOpacity(.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.account_balance_outlined,
+                      size: 26, color: kFucsia),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    "Datos para transferencia",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: .3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            // LISTA DE DATOS
+            _bankRow(
+              icon: Icons.account_balance,
+              title: "Banco",
+              value: "Banco de Ejemplo S.A.",
+              theme: theme,
+            ),
+            const SizedBox(height: 10),
+
+            _bankRow(
+              icon: Icons.person_outline,
+              title: "Titular",
+              value: "DeLirio Florería",
+              theme: theme,
+            ),
+            const SizedBox(height: 10),
+
+            _bankRow(
+              icon: Icons.confirmation_num_outlined,
+              title: "Cuenta",
+              value: "1234567890",
+              theme: theme,
+            ),
+            const SizedBox(height: 10),
+
+            _bankRow(
+              icon: Icons.wallet_outlined,
+              title: "Tipo",
+              value: "Cuenta de ahorros",
+              theme: theme,
+            ),
+
+            const SizedBox(height: 22),
+
+            // MONTO A PAGAR
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kFucsia.withOpacity(.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: RichText(
+                text: TextSpan(
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  children: [
+                    const TextSpan(text: "Monto a pagar ahora: "),
+                    TextSpan(
+                      text: "\$${monto.toStringAsFixed(2)}",
+                      style: const TextStyle(
+                        color: kFucsia,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bankRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required ThemeData theme,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 22, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        )
+      ],
+    );
+  }
+}
+
